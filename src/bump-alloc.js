@@ -2,19 +2,23 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// Shared-memory memory management: a very basic library for bump allocation.
-// 2015-01-13 / lhansen@mozilla.com
+// A basic library for shared-memory bump allocation.
 //
 // Usage:
 //
-// Create an allocator on SharedArrayBuffer with "new SharedBumpAlloc()".
-//   The allocator can be initialized on both master and workers and
-//   will be thread-safe.
+// Initialize the shared memory for the allocators using
+//   BumpAlloc.initialize().
+//
+// Create an allocator on shared memory with "new BumpAlloc()".
+//   Allocators on the same memory can be created independently in
+//   several agents and will be thread-safe.
 //
 // The allocator has accessors for SharedTypedArrays of every type,
 //   eg, m.Int32Array gets you the SharedInt32Array mapped onto the
-//   memory.  These arrays all alias though they may overlap only with
-//   a subrange of the shared memory (overhead, alignment).
+//   memory.  These arrays all alias in all allocators and start at
+//   the same byte offset in the shared memory (though they may
+//   overlap only with part of the shared memory due to overhead and
+//   alignment).
 //
 // The allocator has methods for allocating ranges of elements within
 //   the various typed arrays, eg, m.allocInt32(n) will allocate n
@@ -25,12 +29,15 @@
 // The allocator has utility methods for allocating ranges of elements
 //   within the shared memory as shared typed arrays, eg,
 //   m.allocInt32Array(n) will bump-allocate memory for an n-element
-//   SharedInt32Array and return a new array object.  If the value
-//   returned is null then the allocation failed.
+//   SharedInt32Array and return a new array object on those
+//   locations.  If the value returned is null then the allocation
+//   failed.
 //
-// There is no facility for freeing individual objects.
+// There is no facility for freeing individual locations or objects,
+// nor is there any facility for adding more shared memory to the
+// allocator.
 //
-// Allocation is linear in the heap.
+// Allocation is linear in the shared heap and thread-safe.
 //
 // Use the "mark" method to obtain the current allocation pointer and
 //   the "release" method to reset the allocation pointer to a
@@ -40,55 +47,37 @@
 //   and resetting are racy operations that are best done by one agent
 //   when it knows the other agents are quiescent.
 
+//////////////////////////////////////////////////////////////////////
+
+"use strict";
+
+// PRIVATE values.
+
+const _BA_METAINTS = 2;	        // Must be even.  Metadata + "page zero"
+                                //   buffer to make 0 an illegal pointer
+const _BA_TOP = 0;		// Allocation pointer index in metadata
+const _BA_LIMIT = 1;		// Allocation limit index in metadata
+const _BA_PAGEZEROSZ = 8;	// Number of bytes in unused space
+const _BA_NUMBYTES = _BA_METAINTS*4 + _BA_PAGEZEROSZ;
+
 // Create a memory manager on a piece of shared memory.
 //
 // "sab" is a SharedArrayBuffer.
 // "byteOffset" is an offset within sab where the available memory starts.
-//    This will be rounded up by the memmgr to an eight-byte boundary.
-// "bytesAvail" is the number of bytes in sab starting at byteOffset
-//    available exclusively to the memmgr.  This number will be rounded
-//    down by the memmgr to an eight-byte boundary.
-// "who" is a string, either "master" or "worker".
 //
-// Apart from "who" the arguments passed to the constructor on the
-// master and workers should be the same.
-//
-// NOTE, the construction of the SharedBumpAlloc on the master must be
-// complete before the construction is started on the workers.
-//
-// Storage sizing:
-//  - If byteOffset and bytesAvail are both divisible by eight then no
-//    rounding will take place.
-//  - The allocator will use a few bytes words of shared memory
-//    for its own data structures; the value SharedBumpAlloc.NUMBYTES
-//    will provide the number of bytes.
-//  - There is no per-object overhead (headers or similar), but
-//    allocations are rounded up to an eight-byte boundary.
-//
-// Thus, if the application precomputes the peak number of bytes
-// needed for the its objects and factors in alignment and allocator
-// overhead appropriately then it can pre-allocate a SharedArrayBuffer
-// with tight bounds and count on it being large enough.
-//
-// TODO:
-// It might be useful to attach 'alloc' methods to each of the typed
-// arrays, so that eg sab.Int32Array.alloc(n) would allocate n words
-// within that array.  This would allow passing the array or the
-// allocator around, depending on what's most useful for the appliction.
+// "sab" and "byteOffset" must be the same values as were passed to
+// BumpAlloc.initialize(); a SharedArrayBuffer object in one agent
+// that was transfered from another agent is considered "the same" as
+// the one that was transfered.
 
-const _SBA_METAWORDS = 2;	// Must be even.  Metadata + "page zero" buffer to make 0 an illegal pointer
-const _SBA_TOP = 0;		// Allocation pointer index in metadata
-const _SBA_LIMIT = 1;		// Allocation limit index in metadata
-const _SBA_PAGEZEROSZ = 8;	// Number of bytes in unused space
-const _SBA_NUMBYTES = _SBA_METAWORDS*4 + _SBA_PAGEZEROSZ;
+function BumpAlloc(sab, byteOffset) {
+    const adjustedByteOffset = (byteOffset + 7) & ~7;
 
-function SharedBumpAlloc(sab, byteOffset, bytesAvail, who) {
-    var adjustedByteOffset = (byteOffset + 7) & ~7;
-    var adjustedLimit = (byteOffset + bytesAvail) & ~7;
-    var baseOffset = adjustedByteOffset + _SBA_METAWORDS*4;
-    var adjustedBytesAvail = adjustedLimit - baseOffset;
+    this._meta = new SharedInt32Array(sab, adjustedByteOffset, _BA_METAINTS);
 
-    this._meta = new SharedInt32Array(sab, adjustedByteOffset, _SBA_METAWORDS);
+    const adjustedLimit = Atomics.load(this._meta, _BA_LIMIT);
+    const baseOffset = adjustedByteOffset + _BA_METAINTS*4;
+    const adjustedBytesAvail = adjustedLimit - baseOffset;
 
     this._int8Array = new SharedInt8Array(sab, baseOffset, adjustedBytesAvail);
     this._uint8Array = new SharedUint8Array(sab, baseOffset, adjustedBytesAvail);
@@ -102,25 +91,46 @@ function SharedBumpAlloc(sab, byteOffset, bytesAvail, who) {
     this._limit = adjustedLimit - baseOffset;	// Cache this, it doesn't change
     this._sab = sab;
     this._baseOffset = baseOffset;
-
-    switch (who) {
-    case "master":
-	// Make '0' an illegal address without exposing metadata.
-	this._meta[_SBA_TOP] = _SBA_PAGEZEROSZ;
-	this._meta[_SBA_LIMIT] = adjustedLimit;
-	break;
-    case "worker":
-	break;
-    default:
-	throw new Error("Bad agent designator: " + who);
-    }
 }
 
 // The number of bytes needed for the allocator's internal data.
 
-SharedBumpAlloc.NUMBYTES = _SBA_NUMBYTES;
+BumpAlloc.NUMBYTES = _BA_NUMBYTES;
 
-// The SharedBumpAlloc object has the following accessors:
+// Initialize the shared memory that we'll map the allocator onto.
+//
+// "sab" is a SharedArrayBuffer.
+// "byteOffset" is an offset within sab where the available memory starts.
+//    This will be rounded up by the allocator to an eight-byte boundary.
+// "bytesAvail" is the number of bytes in sab starting at byteOffset
+//    available exclusively to the allocator.  This number will be rounded
+//    down by the allocator to an eight-byte boundary.
+//
+// Sizing the storage for the allocator:
+//  - The allocator will use a few bytes of shared memory for its own
+//    data structures; the value BumpAlloc.NUMBYTES will provide the
+//    number of bytes, properly rounded.
+//  - There is no per-object overhead (headers or similar), but
+//    allocations are rounded up to an eight-byte boundary.
+//
+// Thus, if the application precomputes the peak number of bytes
+// needed for the its objects and factors in alignment and allocator
+// overhead appropriately then it can pre-allocate a SharedArrayBuffer
+// with tight bounds and count on it being large enough.
+//
+// After initialize() has returned the allocators can be constructed
+// and used independently in different agents.
+
+BumpAlloc.initialize =
+    function (sab, byteOffset, bytesAvail) {
+	const adjustedByteOffset = (byteOffset + 7) & ~7;
+	const adjustedLimit = (byteOffset + bytesAvail) & ~7;
+	const _meta = new SharedInt32Array(sab, adjustedByteOffset, _BA_METAINTS);
+	Atomics.store(_meta, _BA_TOP, _BA_PAGEZEROSZ);
+	Atomics.store(_meta, _BA_LIMIT, adjustedLimit);
+    };
+
+// The BumpAlloc object has the following accessors:
 //
 //   Int8Array
 //   Uint8Array
@@ -131,11 +141,10 @@ SharedBumpAlloc.NUMBYTES = _SBA_NUMBYTES;
 //   Float32Array
 //   Float64Array
 //
-// The arrays returned from these all overlap completely (but the
-// length values will only be the same for same-basetype arrays, of
-// course).
-    
-Object.defineProperties(SharedBumpAlloc.prototype,
+// The arrays returned from these all overlap completely, and they
+// overlap across all agents.
+
+Object.defineProperties(BumpAlloc.prototype,
 			{ Int8Array: { get: function () { return this._int8Array; } },
 			  Uint8Array: { get: function () { return this._uint8Array; } },
 			  Int16Array: { get: function () { return this._int16Array; } },
@@ -147,66 +156,68 @@ Object.defineProperties(SharedBumpAlloc.prototype,
 
 // PRIVATE.  Returns an integer byte offset within the sab for nbytes
 // of storage, aligned on an 8-byte boundary.  Returns 0 on allocation
-// error.
+// error.  Thread-safe.
 
-SharedBumpAlloc.prototype._allocBytes =
+BumpAlloc.prototype._allocBytes =
     function (nbytes) {
 	const meta = this._meta;
 	const limit = this._limit;
 	nbytes = (nbytes + 7) & ~7;
 	// There's an alternative protocol here that adds unconditionally and then checks
 	// for overflow, and if there was overflow subtracts and returns zero.  It has
-	// fewer atomic ops in the common case.  But this approach can trigger spurious
+	// fewer atomic ops in the common case.  But that approach can trigger spurious
 	// error returns in other threads.
-	var x = Atomics.load(meta, _SBA_TOP);
+	var x = Atomics.load(meta, _BA_TOP);
 	do {
-	    p = x;
+	    var p = x;
 	    var newtop = p+nbytes;
 	    if (newtop > limit)
 		return 0;
-	} while ((x = Atomics.compareExchange(meta, _SBA_TOP, p, newtop)) != p);
+	} while ((x = Atomics.compareExchange(meta, _BA_TOP, p, newtop)) != p);
 	return p;
     };
 
-// Allocators.  These will round the request up to eight bytes.
-// Returns an index within Int32Array / Uint32Array, or 0 on memory-full.
+// Allocators.  These will round the request up to eight bytes.  Each
+// returns an index within the appropriately typed array, or 0 on
+// allocation error (memory full).
 
-SharedBumpAlloc.prototype.allocInt8 =
+BumpAlloc.prototype.allocInt8 =
     function (nelements) {
 	return this._allocBytes(nelements);
     };
 
-SharedBumpAlloc.prototype.allocUint8 =
-    SharedBumpAlloc.prototype.allocInt8;
+BumpAlloc.prototype.allocUint8 =
+    BumpAlloc.prototype.allocInt8;
 
-SharedBumpAlloc.prototype.allocInt16 =
+BumpAlloc.prototype.allocInt16 =
     function (nelements) {
-	return this._allocBytes(nelements*2) >> 1;
+	return this._allocBytes(nelements*2) >>> 1;
     };
 
-SharedBumpAlloc.prototype.allocUint16 =
-    SharedBumpAlloc.prototype.allocInt16;
+BumpAlloc.prototype.allocUint16 =
+    BumpAlloc.prototype.allocInt16;
 
-SharedBumpAlloc.prototype.allocInt32 =
+BumpAlloc.prototype.allocInt32 =
     function (nelements) {
-	return this._allocBytes(nelements*4) >> 2;
+	return this._allocBytes(nelements*4) >>> 2;
     };
 
-SharedBumpAlloc.prototype.allocUint32 =
-    SharedBumpAlloc.prototype.allocInt32;
+BumpAlloc.prototype.allocUint32 =
+    BumpAlloc.prototype.allocInt32;
 
-SharedBumpAlloc.prototype.allocFloat32 =
-    SharedBumpAlloc.prototype.allocInt32;
+BumpAlloc.prototype.allocFloat32 =
+    BumpAlloc.prototype.allocInt32;
 
-SharedBumpAlloc.prototype.allocFloat64 =
+BumpAlloc.prototype.allocFloat64 =
     function (nelements) {
-	return this._allocBytes(nelements*8) >> 3;
+	return this._allocBytes(nelements*8) >>> 3;
     };
 
 // Convenient methods for allocating array data directly.  These
-// return null on OOM and otherwise a SharedTypedArray.
+// return null on OOM and otherwise a SharedTypedArray of the
+// appropriate type.
 
-SharedBumpAlloc.prototype.allocInt8Array =
+BumpAlloc.prototype.allocInt8Array =
     function (nelements) {
 	var p = this.allocInt8(nelements);
 	if (!p)
@@ -214,7 +225,7 @@ SharedBumpAlloc.prototype.allocInt8Array =
 	return new SharedInt8Array(this._sab, this._baseOffset + p, nelements);
     };
 
-SharedBumpAlloc.prototype.allocUint8Array =
+BumpAlloc.prototype.allocUint8Array =
     function (nelements) {
 	var p = this.allocUint8(nelements);
 	if (!p)
@@ -222,7 +233,7 @@ SharedBumpAlloc.prototype.allocUint8Array =
 	return new SharedUint8Array(this._sab, this._baseOffset + p, nelements);
     };
 
-SharedBumpAlloc.prototype.allocInt16Array =
+BumpAlloc.prototype.allocInt16Array =
     function (nelements) {
 	var p = this.allocInt16(nelements);
 	if (!p)
@@ -230,7 +241,7 @@ SharedBumpAlloc.prototype.allocInt16Array =
 	return new SharedInt16Array(this._sab, this._baseOffset + (p << 1), nelements);
     };
 
-SharedBumpAlloc.prototype.allocUint16Array =
+BumpAlloc.prototype.allocUint16Array =
     function (nelements) {
 	var p = this.allocUint16(nelements);
 	if (!p)
@@ -238,7 +249,7 @@ SharedBumpAlloc.prototype.allocUint16Array =
 	return new SharedUint16Array(this._sab, this._baseOffset + (p << 1), nelements);
     };
 
-SharedBumpAlloc.prototype.allocInt32Array =
+BumpAlloc.prototype.allocInt32Array =
     function (nelements) {
 	var p = this.allocInt32(nelements);
 	if (!p)
@@ -246,7 +257,7 @@ SharedBumpAlloc.prototype.allocInt32Array =
 	return new SharedInt32Array(this._sab, this._baseOffset + (p << 2), nelements);
     };
 
-SharedBumpAlloc.prototype.allocUint32Array =
+BumpAlloc.prototype.allocUint32Array =
     function (nelements) {
 	var p = this.allocUint32(nelements);
 	if (!p)
@@ -254,7 +265,7 @@ SharedBumpAlloc.prototype.allocUint32Array =
 	return new SharedUint32Array(this._sab, this.baseOffset + (p << 2), nelements);
     };
 
-SharedBumpAlloc.prototype.allocFloat32Array =
+BumpAlloc.prototype.allocFloat32Array =
     function (nelements) {
 	var p = this.allocFloat32(nelements);
 	if (!p)
@@ -262,7 +273,7 @@ SharedBumpAlloc.prototype.allocFloat32Array =
 	return new SharedFloat32Array(this._sab, this.baseOffset + (p << 2), nelements);
     };
 
-SharedBumpAlloc.prototype.allocFloat64Array =
+BumpAlloc.prototype.allocFloat64Array =
     function (nelements) {
 	var p = this.allocFloat64(nelements);
 	if (!p)
@@ -272,17 +283,18 @@ SharedBumpAlloc.prototype.allocFloat64Array =
 
 // Mark is a synchronization point.  The returned value is never 0.
 
-SharedBumpAlloc.prototype.mark =
+BumpAlloc.prototype.mark =
     function () {
-	return Atomics.load(this._meta, _SBA_TOP);
+	return Atomics.load(this._meta, _BA_TOP);
     };
 
 // Release is a synchronization point.
+// FIXME: Issue #6: should not allow the alloc pointer to be set above the current pointer.
 
-SharedBumpAlloc.prototype.release =
+BumpAlloc.prototype.release =
     function (p) {
 	const meta = this._meta;
 	if ((p|0) !== p || p < 0 || p > this._int8Array.length)
 	    throw new Error("Unlikely heap marker: " + p);
-	Atomics.store(meta, _SBA_TOP, p);
+	Atomics.store(meta, _BA_TOP, p);
     };
