@@ -295,6 +295,11 @@ BumpAlloc.prototype.release =
     function (p) {
 	const meta = this._meta;
 	if ((p|0) !== p || p < 0 || p > this._int8Array.length)
-	    throw new Error("Unlikely heap marker: " + p);
-	Atomics.store(meta, _BA_TOP, p);
+	    throw new Error("Invalid heap marker: " + p);
+	var x = Atomics.load(meta, _BA_TOP, p);
+	do {
+	    var old = x;
+	    if (p > old)
+		throw new Error("Invalid heap marker (above current top): " + p);
+	} while ((x = Atomics.compareExchange(meta, _BA_TOP, old, p)) != old);
     };

@@ -100,6 +100,18 @@ ba.release(bottom);
 for ( var i=0 ; i < nbytes ; i++ )
     ba.Int32Array[i] = 0xCC;
 
+// Make sure this is not allowed
+ba.release(bottom);
+ba.allocFloat64(1);
+var exn = false;
+try {
+    ba.release(ba.mark() + 8);
+}
+catch (e) {
+    exn = true;
+}
+assertEq(exn, true);
+
 // Check that padding is untouched
 for ( var i=0 ; i < padding ; i++ ) {
     assertEq(tmp[i], 0xDE);
