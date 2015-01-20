@@ -23,6 +23,16 @@
 //
 // Only shared array types are passed by reference, all other types
 // are copied.
+//
+// TODO:
+// Support more data types: simd types; also plain objects, arrays,
+// and typedarrays would be very helpful, at least for small
+// non-self-referential objects; we could have an arbitrary cutoff
+// (bleah) or a warning for large ones, and an error for circular
+// ones.
+//
+// In general it may be useful to allow marshal to take an argument
+// that is a function that can be used to filter.  Look to JSON?
 
 "use strict";
 
@@ -256,10 +266,15 @@ Marshaler.prototype.unmarshal =
 		return self._ftmp[0];
 	    case _MARSHAL_SAB:
 		check(1);
-		return self._knownSAB[M[index++]];
+		var sab = self._knownSAB[M[index++]];
+		if (!sab)
+		    throw new Error("Unknown (unregistered?) SharedArrayBuffer in unmarshaling");
+		return sab;
 	    case _MARSHAL_STA:
 		check(3);
 		var sab = self._knownSAB[M[index++]];
+		if (!sab)
+		    throw new Error("Unknown (unregistered?) SharedArrayBuffer for SharedTypedArray in unmarshaling");
 		var byteOffset = M[index++];
 		var length = M[index++];
 		switch (tag >> 8) {
