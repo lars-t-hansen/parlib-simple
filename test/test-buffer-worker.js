@@ -1,3 +1,7 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 // 2015-01-19 / lhansen@mozilla.com
 
 importScripts("../src/lock.js",
@@ -12,7 +16,7 @@ onmessage =
         var q = new Buffer(iab, bufferIdx, iab, qIdx, qSize);
 
         postMessage("ready " + myID);
-        
+
         var produced = 0;
         while (produced < numElem) {
 	    var elt = produced*numWorkers + myID;
