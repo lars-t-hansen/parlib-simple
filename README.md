@@ -60,19 +60,3 @@ var lockLoc = Lock.initialize(alloc.Int32Array, alloc.allocInt32(Lock.NUMINTS)))
 Other reasons for using the allocator is that it works across agents,
 so memory can be allocated somewhat dynamically in the shared heap
 from multiple agents without coordination.
-
-## TODO
-
-Add to this repo the `Multicore` object from sab-demo/util.
-
-Also, rename `Multicore` to something more appropriate, remove the
-need for the explicit output parameter, and merge the master and worker
-files.
-
-Also, can we factor out the value marshaling used by `Multicore` into
-something that can be used in other contexts?
-
-Also, we should provide a memory allocator that allows memory to be
-freed on an object-by-object basis.  Bonus points for something that
-has better performance than what we currently have (which requires a
-CAS per allocation).
