@@ -54,7 +54,7 @@ function runTest() {
 
 function consumer() {
     console.log("running: master");
-    
+
     // Note this code assumes bufIdx == 0
     var consumed = 0;
     var check = new Int32Array(numWorkers*numElem);

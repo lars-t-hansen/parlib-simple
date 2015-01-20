@@ -1,6 +1,7 @@
 // 2015-01-19 / lhansen@mozilla.com
 
-importScripts("lock.js", "buffer.js");
+importScripts("../src/lock.js",
+	      "../src/buffer.js");
 
 var DEBUG = true;
 

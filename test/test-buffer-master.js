@@ -43,7 +43,7 @@ function runTest() {
 
 function consumer() {
     console.log("running: master");
-    
+
     var consumed = 0;
     var check = new Int32Array(numWorkers*numElem);
     while (consumed < numWorkers*numElem) {
