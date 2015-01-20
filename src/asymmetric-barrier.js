@@ -1,26 +1,31 @@
 // Asymmetric barrier synchronization.
-// 2013-12-03 / lhansen@mozilla.com
+// 2015-01-19 / lhansen@mozilla.com
 
 // MasterBarrier / WorkerBarrier.
 //
 // This is a simple master/worker barrier that is mapped to locations
 // within a shared integer array.
 //
+// The purpose of this barrier is to allow the master--the main thread
+// of the window--not to block, but to receive a callback when the
+// workers have all entered the barrier.
+//
 // Overview
 // --------
 // The master and workers all create private barrier objects, which
-// reference some working locations in shared memory.  When the
+// reference the same working locations in shared memory.  When the
 // workers have all entered the barrier the master receives a
 // callback.  The master must then release the workers again for them
 // to resume computing.
 //
 // Usage
 // -----
-// The master must create a MasterBarrier, and then ensure that
-// Master.dispatch is invoked when a worker's onmessage handler
-// receives a message that the workers are all in the barrier.  That
-// message is an array of the form ["MasterBarrier.dispatch", ID]
-// where ID is the barrier ID.
+// Client code in the master must create a MasterBarrier, and must
+// ensure that MasterBarrier.dispatch is invoked when a worker's
+// onmessage handler receives a message that the workers are all in
+// the barrier.  That message is an array of the form
+// ["MasterBarrier.dispatch", ...].  MasterBarrier.dispatch should
+// be invoked on the message.
 //
 // The workers must each create a WorkerBarrier on the same shared
 // locations and with the same ID as the master barrier.  The
@@ -30,24 +35,28 @@
 // The application is responsible for allocating the locations in the
 // integer array and communicating those and the ID to the workers.
 //
-// The number of consecutive array locations needed is given by
-// MasterBarrier.NUMLOCS.
+// The number of consecutive int32 array locations needed is given by
+// MasterBarrier.NUMINTS.
 
 "use strict";
 
 // Create the master side of a barrier.
 //
 // - 'iab' is a SharedInt32Array
-// - 'ibase' is the first of several consecutive locations within 'iab'
+// - 'ibase' is the first of MasterBarrier.NUMINTS consecutive locations
+//   within 'iab'
 // - 'ID' identifies the barrier globally
 // - 'numWorkers' is the number of workers that will coordinate
 // - 'callback' is the function that is to be called when the workers
 //   are all waiting in the barrier with this ID.
+//
+// 'iab', 'ibase', 'ID', and 'numWorkers' are exposed on the object.
 
 function MasterBarrier(iab, ibase, ID, numWorkers, callback) {
     this.iab = iab;
     this.ibase = ibase;
     this.numWorkers = numWorkers;
+    this.ID = ID;
 
     const counterLoc = ibase;
     const seqLoc = ibase+1;
@@ -64,13 +73,15 @@ MasterBarrier._callbacks = {};
 // The number of consecutive locations in the integer array needed for
 // the barrier.
 
-MasterBarrier.NUMLOCS = 2;
+MasterBarrier.NUMINTS = 2;
 
 // The master's onmessage handler must call dispatch() to invoke the
-// callback for the given barrier ID, see introduction above.
+// callback when receiving an appropriate message, see introduction
+// above.
 
 MasterBarrier.dispatch =
-    function (id) {
+    function (data) {
+	const id = data[1];
 	const cb = MasterBarrier._callbacks[id];
 	if (!cb)
 	    throw new Error("Unknown barrier ID: " + id);
@@ -121,6 +132,8 @@ MasterBarrier.prototype.release =
 // - 'iab' is a SharedInt32Array
 // - 'ibase' is the first of several consecutive locations within 'iab'
 // - 'ID' identifies the barrier globally
+//
+// 'iab', 'ibase', and 'ID' are all exposed on the object.
 
 function WorkerBarrier(iab, ibase, ID) {
     this.iab = iab;
