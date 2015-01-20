@@ -3,7 +3,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // A simple barrier sync.
-// 2015-01-19 / lhansen@mozilla.com
+
+"use strict";
 
 //////////////////////////////////////////////////////////////////////
 //
@@ -42,8 +43,14 @@ Barrier.NUMINTS = 3;
 // Returns 'ibase'.
 Barrier.initialize =
     function (iab, ibase, numAgents) {
-	if (!(iab instanceof SharedInt32Array && ibase|0 == ibase && ibase >= 0 && ibase+Barrier.NUMINTS <= iab.length && numAgents|0 == numAgents))
+	if (!(iab instanceof SharedInt32Array &&
+	      ibase|0 == ibase &&
+	      ibase >= 0 &&
+	      ibase+Barrier.NUMINTS <= iab.length &&
+	      numAgents|0 == numAgents))
+	{
 	    throw new Error("Bad arguments to Barrier initializer: " + iab + " " + ibase + " " + numAgents);
+	}
 
 	const counterLoc = ibase;
 	const seqLoc = ibase+1;
