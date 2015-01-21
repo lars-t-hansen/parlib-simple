@@ -105,8 +105,6 @@ Marshaler.prototype.marshal =
 		}
 		else {
 		    argValues.push(_MARSHAL_F64);
-		    if (argValues.length & 1)
-			argValues.push(0);
 		    self._ftmp[0] = v;
 		    argValues.push(self._itmp[0]);
 		    argValues.push(self._itmp[1]);
@@ -258,8 +256,6 @@ Marshaler.prototype.unmarshal =
 		check(1);
 		return M[index++];
 	    case _MARSHAL_F64:
-		if (index & 1)
-		    index++;
 		check(2);
 		self._itmp[0] = M[index++];
 		self._itmp[1] = M[index++];
@@ -287,7 +283,7 @@ Marshaler.prototype.unmarshal =
 		case _MARSHAL_TAG_U32: return new SharedUint32Array(sab, byteOffset, length);
 		case _MARSHAL_TAG_F32: return new SharedFloat32Array(sab, byteOffset, length);
 		case _MARSHAL_TAG_F64: return new SharedFloat64Array(sab, byteOffset, length);
-		default: throw new Error("Bad array typetag: " + tag.toString(16));
+		default: throw new Error("Bad array typetag: " + (tag >> 8).toString(16));
 		}
 	    case _MARSHAL_BOOL:
 		return !!(tag >> 8);
@@ -310,6 +306,8 @@ Marshaler.prototype.unmarshal =
 		    i++;
 		}
 		return s;
+	    default:
+		throw new Error("Bad data tag: " + tag);
 	    }
 	}
 
