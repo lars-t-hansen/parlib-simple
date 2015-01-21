@@ -507,7 +507,7 @@ WorkerPar.prototype._messageLoop =
 		continue;
 	    }
 
-	    // Can specialize the loop for different values of args.length
+	    // OPTIMIZE: Can specialize the loop for different values of args.length
 	    if (args.length > 0) {
 		switch (size) {
 		case 2: args.unshift(0, 0); break;
@@ -522,7 +522,7 @@ WorkerPar.prototype._messageLoop =
 			fn(M[item], M[item+1]);
 			break;
 		    default:
-			// Can specialize this for small values of args.length, to avoid apply
+			// OPTIMIZE: Can specialize this for small values of args.length, to avoid apply
 			args[0] = M[item];
 			args[1] = M[item+1];
 			fn.apply(null, args);
@@ -535,7 +535,7 @@ WorkerPar.prototype._messageLoop =
 			fn(M[item], M[item+1], M[item+2], M[item+3]);
 			break;
 		    default:
-			// Can specialize this for small values of args.length, to avoid apply
+			// OPTIMIZE: Can specialize this for small values of args.length, to avoid apply
 			args[0] = M[item];
 			args[1] = M[item+1];
 			args[2] = M[item+2];
@@ -555,135 +555,3 @@ WorkerPar.prototype._messageLoop =
 function _WorkerPar_eval(program) {
     _Par_global.eval(program);
 }
-
-//
-// TODO:
-//  - When a callback is null, the full master/worker barrier is not
-//    needed, a worker-only barrier is enough and is probably quite a
-//    bit faster.  It would be useful to implement that optimization.
-//
-//    Indeed, when operations are queued, the current implementation
-//    still makes use of the master-worker barrier and the callback
-//    mechanism, meaning the master must return to the event loop for
-//    queued items to be processed, and is actually holding up
-//    progress if it does not return to the main loop on a fairly
-//    prompt basis.  Using the worker-only barrier would probably help
-//    remove that requirement (which is documented).
-//
-//    The way to implement that is probably with a level of
-//    indirection, where there are several complete task queues in the
-//    working memory (each with a next and limit pointer), where each
-//    queue may carry some indication about which barrier to use at
-//    the end.  (A little tricky that, since the master must still
-//    unblock the workers if they finish available work before more
-//    work is ready.  What we really want is a master/worker barrier
-//    where the master can register interest in control and/or
-//    callback or not, dynamically.  It is possible that a way to
-//    resilience is for the barrier callback to pass a sequence
-//    number, so as to avoid confusion about earlier sent callbacks.)
-//
-//  - Nested parallelism is desirable, ie, a worker should be allowed
-//    to invoke Multicore.build, suspending until that subcomputation
-//    is done.  (Broadcast and eval are less obvious.)
-//
-//  - There is unnecessary lock overhead in having the single work
-//    queue (the pointer for the next item is hotly contended), that
-//    might be improved by having per-worker queues with work stealing
-//    or some sort of batch refilling.  It should not matter too much
-//    if the grain is "right" (see later item on hinting) because then
-//    computation will dominate communication, but it would be useful
-//    to know, and cheaper communication would allow for better
-//    speedup of cheap computations.
-//
-// API CONCERNS:
-//  - Since we don't have memory isolation in this conception of
-//    Multicore.build, and the output array can be passed as an
-//    argument in any case, it may be that we should move to a
-//    Multicore.invoke(cb, name, idx, arg, ...) style, and get rid of
-//    build() in its current form.
-//
-//  - The original conception of Multicore.build would operate on
-//    individual index range elements unless an index was SPLIT.  In
-//    the conception here, the index is always split.  Is this
-//    reasonable, or should we incorporate the non-tiled API as well?
-//
-//  - The original conception of Multicore.build allowed the index
-//    space to contain hints to aid load balancing.  It would be
-//    useful to import that idea, probably, or at least experiment
-//    with it to see if it really affects performance.
-
-/*
-Master/worker protocol.
-
-There are seven distinguished locations in the private working memory
-that are distributed to the workers on startup:
-
-  barrierLoc  - the first location for the shared barrier sync
-  funcLoc     - holds the index of the function name representation
-  sizeLoc     - holds the number of words in a work item
-  nextLoc     - holds the array index of the next work item
-  limLoc      - holds the first array index past the last work item
-  nextArgLoc  - holds the index of the first argument
-  argLimLoc   - holds the first array index past the last argument
-
-The function name is a sequence of values: the first value is the
-number of characters in the name, then follows one character per
-element.
-
-The worker creates a barrier on the barrierLoc and then enters that
-barrier, and thus we're off.
-
-The master has the following actions it wants to accomplish:
-
- - transfer new SAB values
- - perform parallel work
- - broadcast something
-
-
-Transfer:
-
-The workers are made to exit their message loop by passing a
-distinguished value and releasing them from the barrier.  New messages
-are then sent to them to transfer the new SAB values; the workers
-receive them and register them and re-enter the message loop.
-
-
-Computation:
-
-One or more "arguments" are passed in the args area.
-
-Suppose nextArgLoc < argLimLoc.  Let A=nextArgLoc and M be the
-private working memory.
-
-  the M[A] is a tag: int, float, bool, null, undefined, sab, or sta
-  if tag==null or tag==undefined then there's no data
-  if tag==bool then the eighth bit of the tag is 1 or 0
-  if tag==int, then the int follows immediately
-  if tag==float, there may be padding and then the float follows immediately
-    in native word order
-  if tag==string, the high 24 bits of the tag are the string's length,
-    and the following ceil(length/2) words are characters, in order,
-    packed (hi << 16)|lo to each word
-  if tag==sab, then there is one argument word:
-    - sab identifier
-  if tag==sta, then the tag identifies the array type, and there are
-    the following three argument words:
-    - sab identifier
-    - byteoffset, or 0 for
-    - element count
-
-The first argument is always the output array, and it must be a SAB or
-array type.
-
-The arguments past the first are passed to the worker as arguments
-after the index space arguments.
-
-
-Broadcast:
-
-This is exactly as for computation, except that the output array
-argument is always the Multicore system's private metadata SAB, and
-there are no work items.  The worker side recognizes the array as a
-signal and calls the target function once on each worker.
-
-*/
