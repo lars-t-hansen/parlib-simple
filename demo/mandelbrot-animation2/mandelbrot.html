@@ -2,9 +2,9 @@
 <!-- This Source Code Form is subject to the terms of the Mozilla Public
      License, v. 2.0. If a copy of the MPL was not distributed with this
      file, You can obtain one at http://mozilla.org/MPL/2.0/.  -->
-<!-- Simple animation of the Mandelbrot set, demonstrating basic work
-     distribution and use of the asymmetric barrier.  To select a
-     number N of workers, add "?workers=N" to the document URL.  -->
+<!-- Animation of the Mandelbrot set, demonstrating use of the Par
+     framework.  To select a number N of workers, add "?workers=N" to
+     the document URL.  -->
 <html>
 <head>
 <meta http-equiv="content-type" content="text/html; charset=UTF-8">
@@ -16,6 +16,8 @@
 <script src="../../util/numWorkers.js"></script>
 <script src="../../util/canvas.js"></script>
 <script src="../../src/asymmetric-barrier.js"></script>
+<script src="../../src/marshaler.js"></script>
+<script src="../../src/par.js"></script>
 <script src="mandelbrot-parameters.js"></script>
 <script src="mandelbrot-master.js"></script>
 </body>
