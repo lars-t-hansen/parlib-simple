@@ -3,11 +3,11 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // REQUIRE:
-//   marshal.js
 //   asymmetric-barrier.js
+//   marshaler.js
 
 // This is a data-parallel framework that maintains a worker pool and
-// invokes computations in parallel on shared memory, with automatic
+// invokes computations in parallel on those workers, with automatic
 // marshaling of arguments.
 //
 // On the master (usually the main thread), create a new MasterPar
@@ -21,18 +21,19 @@
 //   across workers.  The index space is split up according to
 //   heuristics or directives, and there is load balancing.  You can
 //   pass arguments; they are transmitted for you to the workers.
-//   Often one of the arguments is a shared-memory array that will
-//   receive the results of the computation.
+//   Often, at least one of the arguments is a shared-memory array
+//   that will receive the results of the computation.
 //
-// Call M.broadcast() to invoke a function once on all workers.  This
-//   is useful to precompute intermediate data or distribute invariant
-//   parameters.
+// Call M.broadcast() to invoke a function once on all workers in the
+//   pool.  This is useful for precomputing intermediate data or
+//   distributing invariant parameters.
 //
-// Call M.eval() to eval a program in each worker.  This is useful to
-//   broadcast program code or perform precomputation.
+// Call M.eval() to eval a program in each worker.  This is useful for
+//   broadcasting program code or performing precomputation.
 //
 // Each worker must call W.dispatch() when it receives a message from
-//   its parent.
+//   its parent, and otherwise just define the global functions that
+//   will be referenced by remote invocations.
 
 "use strict";
 
@@ -41,23 +42,24 @@
 // 'iab' is a SharedInt32Array.
 // 'ibase' is the first of MasterPar.NUMINTS locations in iab reserved
 //    for the Par system.
-// 'numWorkers' must be a positive integer.
-// 'workerScript' must be a URL.
+// 'numWorkers' must be a positive integer, the number of workers in
+//    the pool.
+// 'workerScript' must be a URL, the script containing worker code.
 // 'readyCallback' must be a function.
 //
 // This will create a new worker pool with the number of workers and
 // the given script.  When the workers are all up and running,
 // readyCallback will be invoked with no arguments.
 //
-// No further setup is necessary, but see the description of the
+// No further setup is necessary, but see the description at the
 // WorkerPar constructor for information about what needs to happen on
 // the worker side.
 //
-// There can be multiple MasterPar objects, they will each have their
-// own worker pool.
+// There can be multiple MasterPar objects in the same realm, they
+// will each have their own worker pool.
 //
-// iab, ibase, numWorkers, and workerScript are exposed on the
-// MasterPar instance.
+// (The arguments iab, ibase, numWorkers, and workerScript are exposed
+// on the MasterPar instance.)
 
 function MasterPar(iab, ibase, numWorkers, workerScript, readyCallback) {
     const self = this;
@@ -67,6 +69,7 @@ function MasterPar(iab, ibase, numWorkers, workerScript, readyCallback) {
     this.ibase = ibase;
     this.numWorkers = numWorkers;
     this.workerScript = workerScript;
+
     this._alloc = ibase;
     this._limit = ibase + MasterPar.NUMINTS;
     this._barrierLoc = alloc(MasterBarrier.NUMINTS);
@@ -81,12 +84,14 @@ function MasterPar(iab, ibase, numWorkers, workerScript, readyCallback) {
     this._callback = readyCallback;
     this._marshaler = new Marshaler();
     this._marshaler.registerSAB(iab.buffer, 0);
+    this._workers = [];
+    this._queue = [];
 
     for ( var i=0 ; i < numWorkers ; i++ ) {
 	var w = new Worker(workerScript);
 	w.onmessage = messageHandler;
 	w.postMessage(["WorkerPar.start",
-		       iab.buffer, iab.byteOffset,
+		       iab.buffer, iab.byteOffset, i,
 		       this._barrierLoc, barrierID, this._opLoc, this._funcLoc, this._sizeLoc, this._nextLoc,
 		       this._limLoc, this._nextArgLoc, this._argLimLoc],
 		      [iab.buffer]);
@@ -110,7 +115,7 @@ function MasterPar(iab, ibase, numWorkers, workerScript, readyCallback) {
     }
 
     function messageHandler(ev) {
-	bool handled = false;
+	var handled = false;
 	if (Array.isArray(ev.data) && ev.data.length >= 1) {
 	    if (ev.data[0] === "MasterBarrier.dispatch") {
 		handled = true;
@@ -124,6 +129,9 @@ function MasterPar(iab, ibase, numWorkers, workerScript, readyCallback) {
 
 // Number of integer locations reserved for working storage for the
 // Par framework.
+//
+// (64K slots is very generous, but allows for fine-grained
+// invocations across large index spaces or with many arguments.)
 
 MasterPar.NUMINTS = 65536;
 
@@ -132,7 +140,7 @@ MasterPar.NUMINTS = 65536;
 // This method is invoked if a worker posts a message that is not
 // understood by the Par framework.  The argument is the event data
 // object.  The method can do with the message what it wants.  The
-// return value is ignored.
+// method's return value is ignored.
 
 MasterPar.prototype.messageNotUnderstood =
     function (message) {
@@ -151,7 +159,7 @@ const _PAR_MSGLOOPEXIT = 3;
 // load balancing.
 //
 // doneCallback is a function or null.  If a function, it will be
-//   invoked in the master once the work is finished.
+//   invoked in the master with no arguments once the work is finished.
 // fnIdent is the string identifier of the remote function to invoke,
 //   it names a function in the global scope of the worker.
 // indexSpace is an array of length-2 arrays determining the index
@@ -231,7 +239,7 @@ MasterPar.prototype.broadcast =
 
 MasterPar.prototype.eval =
     function (doneCallback, program) {
-	this._comm(_PAR_BROADCAST, doneCallback, "_WorkerPar_eval", [], program);
+	this._comm(_PAR_BROADCAST, doneCallback, "_WorkerPar_eval", [], [program]);
     };
 
 // Internal
@@ -243,7 +251,7 @@ MasterPar.prototype._comm =
 
 	// Operation in flight?  Just enqueue this one.
 	if (self._callback) {
-	    self._queue.push([doneCallback, fnIdent, indexSpace, args]);
+	    self._queue.push([operation, doneCallback, fnIdent, indexSpace, args]);
 	    return;
 	}
 
@@ -263,7 +271,7 @@ MasterPar.prototype._comm =
 	    items = cross(sliceSpace(indexSpace[0][0], indexSpace[0][1]), sliceSpace(indexSpace[1][0], indexSpace[1][1]));
 	    break;
 	default:
-	    throw new Error("Implementation limit: Only 1D and 2D supported as of now");
+	    throw new Error("Implementation limit: Only 1D and 2D supported as of now: " + items);
 	}
 	const itemSize = indexSpace.length * 2;
 	var { values, newSAB } = self._marshaler.marshal(args);
@@ -288,16 +296,20 @@ MasterPar.prototype._comm =
 		    if (!self._barrier.release())
 			throw new Error("Internal barrier error @ 1");
 		};
-	    // Signal message loop exit.
+
+	    // Signal message loop exit so that we can effectuate a transfer.
 	    M[self._opLoc] = _PAR_MSGLOOPEXIT;
 
 	    // Transmit buffers
 	    var xfer = [];
-	    for ( var x of newSAB )
-		xfer.push(x[0]);
-	    newSAB.unshift("WorkerPar.transfer");
+	    var yfer = [];
+	    for ( var x of newSAB ) {
+		xfer.push([x.sab, x.id]);
+		yfer.push(x.sab);
+	    }
+	    xfer.unshift("WorkerPar.transfer");
 	    for ( var w of self._workers )
-		w.postMessage(newSAB, xfer);
+		w.postMessage(xfer, yfer);
 	}
 	else {
 	    self._callback = doneCallback;
@@ -397,6 +409,15 @@ function WorkerPar() {
     this._initialized = false;
 }
 
+// self()
+//
+// Get the identity of this worker.  Identities are allocated in a
+// dense space starting at zero.
+
+Object.defineProperty(WorkerPar.prototype,
+		      "self",
+		      { get: function () { return this._identity } });
+
 // Attempt to dispatch a message.
 //
 // 'message' is the event's 'data' field.
@@ -431,13 +452,16 @@ WorkerPar.prototype.dispatch =
 	}
     };
 
+// Internal
+
 const _Par_global = this;
 
 WorkerPar.prototype._initialize =
     function (message) {
-	var [_, sab, byteOffset, barrierLoc, barrierID, opLoc, funcLoc, sizeLoc, nextLoc, limLoc, nextArgLoc, argLimLoc] = message;
-	this.iab = new SharedInt32Array(sab, byteOffset);
+	var [_, sab, byteOffset, identity, barrierLoc, barrierID, opLoc, funcLoc, sizeLoc, nextLoc, limLoc, nextArgLoc, argLimLoc] = message;
+	this.iab = new SharedInt32Array(sab, byteOffset, MasterPar.NUMINTS);
 	this._barrier = new WorkerBarrier(this.iab, barrierLoc, barrierID);
+	this._identity = identity;
 	this._opLoc = opLoc;
 	this._funcLoc = funcLoc;
 	this._sizeLoc = sizeLoc;
@@ -456,7 +480,7 @@ WorkerPar.prototype._messageLoop =
 
 	for (;;) {
 	    this._barrier.enter();
-	    var operation = m[this._opLoc];
+	    var operation = M[this._opLoc];
 
 	    if (operation == _PAR_MSGLOOPEXIT)
 		break;
@@ -467,7 +491,7 @@ WorkerPar.prototype._messageLoop =
 	    var argLimit = M[this._argLimLoc];
 
 	    var item = Atomics.add(M, this._nextLoc, size);
-	    var args = this._marshaler.unmarshal(M, nextArg, argLimit);
+	    var args = this._marshaler.unmarshal(M, nextArg, argLimit-nextArg);
 
 	    var p = M[this._funcLoc];
 	    var l = M[p++];
@@ -479,8 +503,6 @@ WorkerPar.prototype._messageLoop =
 		throw new Error("No function installed for ID '" + id + "'");
 
 	    if (operation == _PAR_BROADCAST) {
-		// Broadcast.  Do not expect any work items, just invoke the function and
-		// reenter the barrier.
 		fn.apply(null, args);
 		continue;
 	    }
@@ -501,8 +523,8 @@ WorkerPar.prototype._messageLoop =
 			break;
 		    default:
 			// Can specialize this for small values of args.length, to avoid apply
-			args[1] = M[item];
-			args[2] = M[item+1];
+			args[0] = M[item];
+			args[1] = M[item+1];
 			fn.apply(null, args);
 			break;
 		    }
@@ -514,10 +536,10 @@ WorkerPar.prototype._messageLoop =
 			break;
 		    default:
 			// Can specialize this for small values of args.length, to avoid apply
-			args[1] = M[item];
-			args[2] = M[item+1];
-			args[3] = M[item+2];
-			args[4] = M[item+3];
+			args[0] = M[item];
+			args[1] = M[item+1];
+			args[2] = M[item+2];
+			args[3] = M[item+3];
 			fn.apply(null, args);
 			break;
 		    }
