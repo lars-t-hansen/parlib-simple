@@ -4,7 +4,7 @@
 
 // Sanity tests for the marshaling code to be run in the shell.
 
-load("../src/marshal.js");
+load("../src/marshaler.js");
 
 var m1 = new Marshaler();
 var m2 = new Marshaler();

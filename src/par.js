@@ -1,72 +1,103 @@
-// Data-parallel framework on shared memory.
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // REQUIRE:
 //   marshal.js
 //   asymmetric-barrier.js
 
-// A simple data-parallel framework that maintains a worker pool and
-// invokes computations in parallel on shared memory.
+// This is a data-parallel framework that maintains a worker pool and
+// invokes computations in parallel on shared memory, with automatic
+// marshaling of arguments.
 //
-// Load this into your main program, after loading marshal.js and
-// asymmetric-barrier.js.
+// On the master (usually the main thread), create a new MasterPar
+//   object M that will control the computation.  It will create a
+//   number of new workers with the provided URL.
 //
-// Call Multicore.init() to set things up, once.
+// On each new worker, create a new WorkerPar object W that will
+//   receive and process work requests.
 //
-// Call Multicore.build() to distribute and perform computation.
+// Call M.invoke() to invoke a function on subsets of an index space
+//   across workers.  The index space is split up according to
+//   heuristics or directives, and there is load balancing.  You can
+//   pass arguments; they are transmitted for you to the workers.
+//   Often one of the arguments is a shared-memory array that will
+//   receive the results of the computation.
 //
-// Call Multicore.broadcast() to invoke a function on all workers, eg
-// to precompute intermediate data or distribute invariant parameters.
+// Call M.broadcast() to invoke a function once on all workers.  This
+//   is useful to precompute intermediate data or distribute invariant
+//   parameters.
 //
-// Call Multicore.eval() to eval a program in each worker, eg to
-// broadcast program code or precomputations.
+// Call M.eval() to eval a program in each worker.  This is useful to
+//   broadcast program code or perform precomputation.
+//
+// Each worker must call W.dispatch() when it receives a message from
+//   its parent.
 
 "use strict";
 
-// MulticoreMaster constructor.
+// Create a MasterPar object.
 //
-// iab is a SharedInt32Array.
-// ibase is the first of MulticoreMaster.NUMINTS locations
-//   in iab reserved for the Multicore system.
-// numWorkers must be a positive integer.
-// workerScript must be a URL.
-// readyCallback must be a function, it will be called without arguments
-//   when the workers have been set up.
+// 'iab' is a SharedInt32Array.
+// 'ibase' is the first of MasterPar.NUMINTS locations in iab reserved
+//    for the Par system.
+// 'numWorkers' must be a positive integer.
+// 'workerScript' must be a URL.
+// 'readyCallback' must be a function.
+//
+// This will create a new worker pool with the number of workers and
+// the given script.  When the workers are all up and running,
+// readyCallback will be invoked with no arguments.
+//
+// No further setup is necessary, but see the description of the
+// WorkerPar constructor for information about what needs to happen on
+// the worker side.
+//
+// There can be multiple MasterPar objects, they will each have their
+// own worker pool.
+//
+// iab, ibase, numWorkers, and workerScript are exposed on the
+// MasterPar instance.
 
-function MulticoreMaster(iab, ibase, numWorkers, workerScript, readyCallback) {
+function MasterPar(iab, ibase, numWorkers, workerScript, readyCallback) {
+    const self = this;
+    const barrierID = 1337;	// TODO: pick something non-constant?
+
     this.iab = iab;
     this.ibase = ibase;
-    this._numWorkers = numWorkers;
+    this.numWorkers = numWorkers;
+    this.workerScript = workerScript;
     this._alloc = ibase;
-    this._limit = ibase + MulticoreMaster.NUMINTS;
-    this._barrierLoc = _Multicore_alloc;
-    this._barrier = new MasterBarrier(0x1337, // TODO: can we pick something non-constant, please?
-				      this._numWorkers,
-				      this.iab,
-				      this._barrierLoc,
-				      barrierQuiescent);
-    this._alloc += MasterBarrier.NUMLOCS;
-    this._funcLoc = _Multicore_alloc++;
-    this._sizeLoc = _Multicore_alloc++;
-    this._nextLoc = _Multicore_alloc++;
-    this._limLoc = _Multicore_alloc++;
-    this._nextArgLoc = _Multicore_alloc++;
-    this._argLimLoc = _Multicore_alloc++;
+    this._limit = ibase + MasterPar.NUMINTS;
+    this._barrierLoc = alloc(MasterBarrier.NUMINTS);
+    this._barrier = new MasterBarrier(iab, this._barrierLoc, barrierID, numWorkers, barrierQuiescent);
+    this._opLoc = alloc(1);
+    this._funcLoc = alloc(1);
+    this._sizeLoc = alloc(1);
+    this._nextLoc = alloc(1);
+    this._limLoc = alloc(1);
+    this._nextArgLoc = alloc(1);
+    this._argLimLoc = alloc(1);
     this._callback = readyCallback;
     this._marshaler = new Marshaler();
-    this._marshaler.registerSAB(this.iab.buffer);
+    this._marshaler.registerSAB(iab.buffer, 0);
 
     for ( var i=0 ; i < numWorkers ; i++ ) {
 	var w = new Worker(workerScript);
 	w.onmessage = messageHandler;
-	w.postMessage(["start",
-		       this.iab.buffer,
-		       this._barrierLoc, this._funcLoc, this._sizeLoc, this._nextLoc, this._limLoc,
-		       this._nextArgLoc, this._argLimLoc],
-		      [this.iab.buffer]);
+	w.postMessage(["WorkerPar.start",
+		       iab.buffer, iab.byteOffset,
+		       this._barrierLoc, barrierID, this._opLoc, this._funcLoc, this._sizeLoc, this._nextLoc,
+		       this._limLoc, this._nextArgLoc, this._argLimLoc],
+		      [iab.buffer]);
 	this._workers.push(w);
     }
 
-    const self = this;
+    function alloc(n) {
+	var p = self._alloc;
+	self._alloc += n;
+	return p;
+    }
 
     function barrierQuiescent() {
 	var fn;
@@ -79,36 +110,50 @@ function MulticoreMaster(iab, ibase, numWorkers, workerScript, readyCallback) {
     }
 
     function messageHandler(ev) {
+	bool handled = false;
 	if (Array.isArray(ev.data) && ev.data.length >= 1) {
-	    switch (ev.data[0]) {
-	    case "MasterBarrier.dispatch":
+	    if (ev.data[0] === "MasterBarrier.dispatch") {
+		handled = true;
 		MasterBarrier.dispatch(ev.data);
-		break;
-	    default:
-		console.log(ev.data);
-		break;
 	    }
 	}
-	else
-	    console.log(ev.data);
+	if (!handled)
+	    self.messageNotUnderstood(ev.data);
     }
 }
 
-MulticoreMaster.NUMINTS = 65536;
+// Number of integer locations reserved for working storage for the
+// Par framework.
 
+MasterPar.NUMINTS = 65536;
 
-// Multicore.build()
+// messageNotUnderstood()
 //
-// Invoke a function in parallel on sections of an index space,
-// producing output into a predefined shared memory array.
+// This method is invoked if a worker posts a message that is not
+// understood by the Par framework.  The argument is the event data
+// object.  The method can do with the message what it wants.  The
+// return value is ignored.
+
+MasterPar.prototype.messageNotUnderstood =
+    function (message) {
+	console.log(message);
+    };
+
+// Private constants.
+
+const _PAR_INVOKE = 1;
+const _PAR_BROADCAST = 2;
+const _PAR_MSGLOOPEXIT = 3;
+
+// invoke()
+//
+// Invoke a function in parallel on sections of an index space, with
+// load balancing.
 //
 // doneCallback is a function or null.  If a function, it will be
 //   invoked in the master once the work is finished.
 // fnIdent is the string identifier of the remote function to invoke,
 //   it names a function in the global scope of the worker.
-// outputMem is a SharedTypedArray or SharedArrayBuffer that will (in
-//   principle, though it's up to user code) receive the results of
-//   the computation.
 // indexSpace is an array of length-2 arrays determining the index
 //   space of the computation; workers will be invoked on subvolumes
 //   of this space in an unpredictable order.
@@ -116,15 +161,16 @@ MulticoreMaster.NUMINTS = 65536;
 //   bool, string, undefined, or null values and will be marshalled
 //   and passed as arguments to the user function on the worker side.
 //
+// Returns nothing.
+//
 // The handler function identified by fnIdent will be invoked on the
 // following arguments, in order:
-//   outpuMem
 //   base and limit values for each element in indexSet, in order
 //   any additional ...args
 // Thus if the length of indexSet is three and there are four
-// additional arguments then the number of arguments is 1+2*3+4.
+// additional arguments then the number of arguments is 2*3+4.
 //
-// Serialization of calls: You can call build, broadcast, or eval
+// Serialization of calls: You can call invoke, broadcast, or eval
 // repeatedly without waiting for callbacks.  The calls will be queued
 // by the framework and dispatched in order.  All object arguments
 // will be retained by reference while a call is queued; beware of
@@ -134,20 +180,17 @@ MulticoreMaster.NUMINTS = 65536;
 // system-supplied callback, so the master must return to its event
 // loop for the dispatching of queued tasks.
 
-MulticoreMaster.prototype.build =
-    function (doneCallback, fnIdent, outputMem, indexSpace, ...args) {
+MasterPar.prototype.invoke =
+    function (doneCallback, fnIdent, indexSpace, ...args) {
 	if (!Array.isArray(indexSpace) || indexSpace.length < 1)
 	    throw new Error("Bad indexSpace: " + indexSpace);
 	for ( var x of indexSpace )
 	    if (x.length != 2 || typeof x[0] != 'number' || typeof x[1] != 'number' || (x[0]|0) != x[0] || (x[1]|0) != x[1])
 		throw new Error("Bad indexSpace element " + x)
-	// TODO: should check that type of outputMem is SharedArrayBuffer or SharedTypedArray
-	if (!outputMem)
-	    throw new Error("Bad output memory: " + outputmem);
-	return _Multicore_comm(doneCallback, fnIdent, outputMem, indexSpace, args);
+	this._comm(_PAR_INVOKE, doneCallback, fnIdent, indexSpace, args);
     };
 
-// Multicore.broadcast()
+// broadcast()
 //
 // Invoke a function once on each worker.
 //
@@ -159,18 +202,20 @@ MulticoreMaster.prototype.build =
 //   and will be marshalled and passed as arguments to the user
 //   function on the worker side.
 //
+// Returns nothing.
+//
 // The handler function identified by fnIdent will be invoked on the
 // ...args only, no other arguments are passed.
 //
 // See the note about serialization of calls on the documentation for
-// Multicore.build().
+// invoke().
 
-MulticoreMaster.prototype.broadcast =
+MasterPar.prototype.broadcast =
     function(doneCallback, fnIdent, ...args) {
-	return _Multicore_comm(doneCallback, fnIdent, null, [], args);
+	this._comm(_PAR_BROADCAST, doneCallback, fnIdent, [], args);
     };
 
-// Multicore.eval()
+// eval()
 //
 // Evaluate a program once on each worker.
 //
@@ -179,34 +224,32 @@ MulticoreMaster.prototype.broadcast =
 // program is textual program code, to be evaluated in the global
 //   scope of the worker.
 //
+// Returns nothing.
+//
 // See the note about serialization of calls on the documentation for
-// Multicore.build().
+// invoke().
 
-MulticoreMaster.prototype.eval =
+MasterPar.prototype.eval =
     function (doneCallback, program) {
-	_Multicore_broadcast(doneCallback, "_Multicore_eval", program);
+	this._comm(_PAR_BROADCAST, doneCallback, "_WorkerPar_eval", [], program);
     };
-
-
-
 
 // Internal
 
-MulticoreMaster.prototype._comm =
-    function (doneCallback, fnIdent, outputMem, indexSpace, args) {
-	const M = _Multicore_mem;
+MasterPar.prototype._comm =
+    function (operation, doneCallback, fnIdent, indexSpace, args) {
+	const self = this;
+	const M = self.iab;
 
 	// Operation in flight?  Just enqueue this one.
-	if (_Multicore_callback) {
-	    _Multicore_queue.push([doneCallback, fnIdent, outputMem, indexSpace, args]);
+	if (self._callback) {
+	    self._queue.push([doneCallback, fnIdent, indexSpace, args]);
 	    return;
 	}
 
-	// Broadcast
-	if (outputMem === null)
-	    outputMem = _Multicore_mem.buffer;
-	if (!_Multicore_barrier.isQuiescent())
-	    throw new Error("Do not call Multicore.build until the previous call has completed!");
+	if (!self._barrier.isQuiescent())
+	    throw new Error("Internal: call on MasterPar._comm before the previous call has completed");
+
 	var items;
 	switch (indexSpace.length) {
 	case 0:
@@ -220,10 +263,10 @@ MulticoreMaster.prototype._comm =
 	    items = cross(sliceSpace(indexSpace[0][0], indexSpace[0][1]), sliceSpace(indexSpace[1][0], indexSpace[1][1]));
 	    break;
 	default:
-	    throw new Error("Only 1D and 2D supported as of now");
+	    throw new Error("Implementation limit: Only 1D and 2D supported as of now");
 	}
 	const itemSize = indexSpace.length * 2;
-	var { argValues, newSAB } = processArgs(outputMem, args);
+	var { values, newSAB } = self._marshaler.marshal(args);
 	if (doneCallback === null)
 	    doneCallback = processQueue;
 	else
@@ -232,52 +275,51 @@ MulticoreMaster.prototype._comm =
 		    processQueue();
 		    doneCallback();
 		} })(doneCallback);
-	if (newSAB.length) {
-	    _Multicore_callback =
+
+	if (newSAB.length > 0) {
+	    self._callback =
 		function () {
-		    _Multicore_callback = doneCallback;
-		    var p = _Multicore_alloc;
-		    p = installArgs(p, argValues);
-		    p = installItems(p, fnIdent, itemSize, items);
-		    if (p >= M.length)
+		    self._callback = doneCallback;
+		    var p = self._alloc;
+		    p = installArgs(p, values);
+		    p = installItems(operation, p, fnIdent, itemSize, items);
+		    if (p >= self._limit)
 			throw new Error("Not enough working memory");
-		    if (!_Multicore_barrier.release())
+		    if (!self._barrier.release())
 			throw new Error("Internal barrier error @ 1");
 		};
 	    // Signal message loop exit.
-	    // Any negative number larger than numWorkers will do.
-	    M[_Multicore_funcLoc] = -1;
-	    M[_Multicore_sizeLoc] = 0;
-	    M[_Multicore_nextLoc] = -1000000;
+	    M[self._opLoc] = _PAR_MSGLOOPEXIT;
+
 	    // Transmit buffers
 	    var xfer = [];
 	    for ( var x of newSAB )
 		xfer.push(x[0]);
-	    newSAB.unshift("transfer");
-	    for ( var w of _Multicore_workers )
+	    newSAB.unshift("WorkerPar.transfer");
+	    for ( var w of self._workers )
 		w.postMessage(newSAB, xfer);
 	}
 	else {
-	    _Multicore_callback = doneCallback;
-	    var p = _Multicore_alloc;
-	    p = installArgs(p, argValues);
-	    p = installItems(p, fnIdent, itemSize, items);
+	    self._callback = doneCallback;
+	    var p = self._alloc;
+	    p = installArgs(p, values);
+	    p = installItems(operation, p, fnIdent, itemSize, items);
 	    if (p >= M.length)
 		throw new Error("Not enough working memory");
 	}
-	if (!_Multicore_barrier.release())
+	if (!self._barrier.release())
 	    throw new Error("Internal barrier error @ 2");
 
 	function processQueue() {
-	    if (_Multicore_queue.length)
-		_Multicore_comm.apply(Multicore, _Multicore_queue.shift());
+	    if (self._queue.length)
+		self._comm.apply(self, self._queue.shift());
 	}
 
 	function sliceSpace(lo, lim) {
 	    var items = [];
 	    var numItem = (lim - lo);
-	    var sliceHeight = Math.floor(numItem / (4*_Multicore_numWorkers));
-	    var extra = numItem % (4*_Multicore_numWorkers);
+	    var sliceHeight = Math.floor(numItem / (4*self.numWorkers));
+	    var extra = numItem % (4*self.numWorkers);
 	    while (lo < lim) {
 		var hi = lo + sliceHeight;
 		if (extra) {
@@ -299,20 +341,21 @@ MulticoreMaster.prototype._comm =
 	}
 
 	function installArgs(p, values) {
-	    M[_Multicore_nextArgLoc] = p;
+	    M[self._nextArgLoc] = p;
 	    for ( var v of values )
 		M[p++] = v;
-	    M[_Multicore_argLimLoc] = p;
+	    M[self._argLimLoc] = p;
 	    return p;
 	}
 
-	function installItems(p, fn, wordsPerItem, items) {
-	    M[_Multicore_sizeLoc] = wordsPerItem;
-	    M[_Multicore_funcLoc] = p;
+	function installItems(operation, p, fn, wordsPerItem, items) {
+	    M[self._sizeLoc] = wordsPerItem;
+	    M[self._opLoc] = operation;
+	    M[self._funcLoc] = p;
 	    M[p++] = fn.length;
 	    for ( var c of fn )
 		M[p++] = c.charCodeAt(0);
-	    M[_Multicore_nextLoc] = p;
+	    M[self._nextLoc] = p;
 	    switch (wordsPerItem) {
 	    case 0:
 		break;
@@ -328,70 +371,58 @@ MulticoreMaster.prototype._comm =
 			    M[p++] = k;
 		break;
 	    }
-	    M[_Multicore_limLoc] = p;
+	    M[self._limLoc] = p;
 	    return p;
 	}
     };
 
-//////////////////////////////////////////////////////////////////////
+// Create a WorkerPar object.
 //
-// Takes what arguments?  None, because it gets them all from the master by message.
-// Returns what values?  (Probably a message handler that will be invoked when messages
-// are array messages with the tag MulticoreWorker.start and MulticoreWorker.transfer)
+// The client's worker code must ensure that the WorkerPar instance's
+// dispatch() method is invoked when a message is received.  That
+// method will return true if it consumed the message.  Typically:
+//
+//   var wp = new WorkerPar();
+//   onmessage =
+//       function (ev) {
+//           if (!wp.dispatch(ev.data))
+//              handleMessageSomehow(ev.data);
+//       };
+//
+// Note that it does not normally make sense to create multiple
+// WorkerPar objects in the same worker, and doing so is not supported
+// by current code.
 
-/*
-   On the worker:
-
-   // we could tag it with a given task and thus have multiple workers.  But why, when
-   // all it does is look up a function and invoke it?  It's enough to have one, but
-   // it's useful to be able to patch other things into the message loop, like here.
-
-   var worker = new MulticoreWorker();
-   onmessage =
-       function (ev) {
-           if (worker(ev))
-              ;
-           else ...
-       }
-*/
-
-function MulticoreWorker() {
+function WorkerPar() {
     this._initialized = false;
-    return MulticoreWorker.prototype._messageHandler.bind(this);
 }
 
-MulticoreWorker.prototype._messageHandler =
-    function (ev) {
-        if (!Array.isArray(ev.data) || typeof ev.data[0] != 'string') return false;
-	switch (ev.data[0]) {
-	case "MulticoreWorker.start":
-	    // This would not be a limitation if we also had some ID...
-	    if (this._initialized)
-		throw new Error("MulticoreWorker can only be initialized once");
+// Attempt to dispatch a message.
+//
+// 'message' is the event's 'data' field.
+//
+// Return true if the message was consumed, false if not.  See comment
+// above the WorkerPar constructor for more.
 
-	    var [_, sab, barrierLoc, funcLoc, sizeLoc, nextLoc, limLoc, nextArgLoc, argLimLoc] = ev.data;
-	    this.iab = new SharedInt32Array(sab);
-	    this._barrier = new WorkerBarrier(0x1337, this.iab, barrierLoc); // TODO: barrier ID should be controlled by master
-	    this._funcLoc = funcLoc;
-	    this._sizeLoc = sizeLoc;
-	    this._nextLoc = nextLoc;
-	    this._limLoc = limLoc;
-	    this._nextArgLoc = nextArgLoc;
-	    this._argLimLoc = argLimLoc;
-	    this._marshaler = new Marshaler();
-	    this._marshaler.registerSAB(sab);
-	    this._initialized = true;
+WorkerPar.prototype.dispatch =
+    function (message) {
+        if (!Array.isArray(message) || typeof message[0] != 'string')
+	    return false;
+	switch (message[0]) {
+	case "WorkerPar.start":
+	    if (this._initialized)
+		throw new Error("WorkerPar can only be initialized once");
+	    this._initialize(message);
 	    this._messageLoop();
 	    return true;
 
-	case "MulticoreWorker.transfer":
+	case "WorkerPar.transfer":
 	    if (!this._initialized)
-		throw new Error("MulticoreWorker is not yet initialized");
-
-	    var info = ev.data;
+		throw new Error("WorkerPar is not yet initialized");
+	    var info = message;
 	    info.shift();
-	    for ( var [sab,k] of info )
-		this._marshaler.registerSAB(sab, k);
+	    for ( var [sab,id] of info )
+		this._marshaler.registerSAB(sab, id);
 	    this._messageLoop();
 	    return true;
 
@@ -400,37 +431,54 @@ MulticoreWorker.prototype._messageHandler =
 	}
     };
 
-MulticoreWorker.prototype._messageLoop =
+const _Par_global = this;
+
+WorkerPar.prototype._initialize =
+    function (message) {
+	var [_, sab, byteOffset, barrierLoc, barrierID, opLoc, funcLoc, sizeLoc, nextLoc, limLoc, nextArgLoc, argLimLoc] = message;
+	this.iab = new SharedInt32Array(sab, byteOffset);
+	this._barrier = new WorkerBarrier(this.iab, barrierLoc, barrierID);
+	this._opLoc = opLoc;
+	this._funcLoc = funcLoc;
+	this._sizeLoc = sizeLoc;
+	this._nextLoc = nextLoc;
+	this._limLoc = limLoc;
+	this._nextArgLoc = nextArgLoc;
+	this._argLimLoc = argLimLoc;
+	this._marshaler = new Marshaler();
+	this._marshaler.registerSAB(sab, 0);
+	this._initialized = true;
+    };
+
+WorkerPar.prototype._messageLoop =
     function () {
 	const M = this.iab;
 
 	for (;;) {
-	    _Multicore_barrier.enter();
-	    var size = M[_Multicore_sizeLoc];
-	    var limit = M[_Multicore_limLoc];
-	    var nextArg = M[_Multicore_nextArgLoc];
-	    var argLimit = M[_Multicore_argLimLoc];
+	    this._barrier.enter();
+	    var operation = m[this._opLoc];
 
-	    var item = Atomics.add(M, _Multicore_nextLoc, size);
-	    if (item < 0)
+	    if (operation == _PAR_MSGLOOPEXIT)
 		break;
 
-	    var userMem = parseArg();
-	    var args = [];
-	    while (nextArg < argLimit)
-		args.push(parseArg());
+	    var size = M[this._sizeLoc];
+	    var limit = M[this._limLoc];
+	    var nextArg = M[this._nextArgLoc];
+	    var argLimit = M[this._argLimLoc];
 
-	    var p = M[_Multicore_funcLoc];
+	    var item = Atomics.add(M, this._nextLoc, size);
+	    var args = this._marshaler.unmarshal(M, nextArg, argLimit);
+
+	    var p = M[this._funcLoc];
 	    var l = M[p++];
 	    var id = "";
 	    for ( var i=0 ; i < l ; i++ )
 		id += String.fromCharCode(M[p++]);
-	    var fn = _Multicore_global[id];
+	    var fn = _Par_global[id];
 	    if (!fn || !(fn instanceof Function))
 		throw new Error("No function installed for ID '" + id + "'");
 
-	    // Passing the private memory as the output buffer is a special signal.
-	    if (userMem == this.iab.buffer) {
+	    if (operation == _PAR_BROADCAST) {
 		// Broadcast.  Do not expect any work items, just invoke the function and
 		// reenter the barrier.
 		fn.apply(null, args);
@@ -440,8 +488,8 @@ MulticoreWorker.prototype._messageLoop =
 	    // Can specialize the loop for different values of args.length
 	    if (args.length > 0) {
 		switch (size) {
-		case 2: args.unshift(userMem, 0, 0); break;
-		case 4: args.unshift(userMem, 0, 0, 0, 0); break;
+		case 2: args.unshift(0, 0); break;
+		case 4: args.unshift(0, 0, 0, 0); break;
 		}
 	    }
 	    while (item < limit) {
@@ -449,10 +497,10 @@ MulticoreWorker.prototype._messageLoop =
 		case 2:
 		    switch (args.length) {
 		    case 0:
-			fn(userMem, M[item], M[item+1]);
+			fn(M[item], M[item+1]);
 			break;
 		    default:
-			// Can specialize this for small values of args.length
+			// Can specialize this for small values of args.length, to avoid apply
 			args[1] = M[item];
 			args[2] = M[item+1];
 			fn.apply(null, args);
@@ -462,10 +510,10 @@ MulticoreWorker.prototype._messageLoop =
 		case 4:
 		    switch (args.length) {
 		    case 0:
-			fn(userMem, M[item], M[item+1], M[item+2], M[item+3]);
+			fn(M[item], M[item+1], M[item+2], M[item+3]);
 			break;
 		    default:
-			// Can specialize this for small values of args.length
+			// Can specialize this for small values of args.length, to avoid apply
 			args[1] = M[item];
 			args[2] = M[item+1];
 			args[3] = M[item+2];
@@ -477,10 +525,14 @@ MulticoreWorker.prototype._messageLoop =
 		default:
 		    throw new Error("Only 1D and 2D computations supported");
 		}
-		item = Atomics.add(M, _Multicore_nextLoc, size);
+		item = Atomics.add(M, this._nextLoc, size);
 	    }
 	}
     };
+
+function _WorkerPar_eval(program) {
+    _Par_global.eval(program);
+}
 
 //
 // TODO:
