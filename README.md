@@ -10,8 +10,9 @@ The data structures provided here are:
 
 * locks and condition variables (lock.js)
 * multi-producer multi-consumer bounded buffer (buffer.js)
-* symmetric barrier synchronization (barrier.js)
+* barrier synchronization (barrier.js)
 * shared-memory "bump" memory allocator (bump-alloc.js)
+* load-balancing data parallel framework (par.js)
 * asymmetric master/worker barrier synchronization (asymmetric-barrier.js)
 
 ## Allocating and initializing shared memory
