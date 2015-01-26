@@ -30,7 +30,7 @@ const barrierID = 1337;
 // Note, numWorkers is set by the .html document.
 
 const barrier = new MasterBarrier(mem, barrierLoc, barrierID, numWorkers, barrierCallback);
-const sliceHeight = height/numWorkers;
+const sliceHeight = Math.ceil(height/numWorkers);
 
 for ( var i=0 ; i < numWorkers ; i++ ) {
     var w = new Worker("mandelbrot-worker.js");
