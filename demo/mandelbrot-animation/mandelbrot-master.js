@@ -2,6 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+"use strict";
+
 // We set up shared memory and a Barrier and distribute them to the
 // workers.  The workers then enter the barrier.  Once they've all
 // done so the master receives a callback, after which it distributes

@@ -25,6 +25,8 @@
  *
  */
 
+"use strict";
+
 importScripts("../../src/asymmetric-barrier.js",
 	      "../../src/marshaler.js",
 	      "../../src/par.js");

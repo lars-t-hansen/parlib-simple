@@ -25,6 +25,8 @@
  *
  */
 
+"use strict";
+
 var World = function() {
     this.xRot = 0;
     this.yRot = 0;
