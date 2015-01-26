@@ -2,8 +2,6 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// 2015-01-20 / lhansen@mozilla.com
-//
 // See explanation in mandelbrot-master.js.
 
 importScripts("../../src/asymmetric-barrier.js",
@@ -11,13 +9,14 @@ importScripts("../../src/asymmetric-barrier.js",
 
 onmessage =
     function (ev) {
-	var [sab, barrierID, barrierLoc, magnificationLoc, ybase, ylimit] = ev.data;
-	var mem = new SharedInt32Array(sab);
-	var barrier = new WorkerBarrier(mem, barrierLoc, barrierID);
+	var [sab, intByteOffset, intLength, floByteOffset, floLength, barrierID, barrierLoc, magnificationLoc, ybase, ylimit] = ev.data;
+	var intmem = new SharedInt32Array(sab, intByteOffset, intLength);
+	var flomem = new SharedFloat64Array(sab, floByteOffset, floLength);
+	var barrier = new WorkerBarrier(intmem, barrierLoc, barrierID);
 
 	barrier.enter();
-	while (mem[magnificationLoc] != 0) {
-	    mandelbrot(mem, ybase, ylimit, mem[magnificationLoc]);
+	while (flomem[magnificationLoc] != 0) {
+	    mandelbrot(intmem, ybase, ylimit, flomem[magnificationLoc]);
 	    barrier.enter();
 	}
     };

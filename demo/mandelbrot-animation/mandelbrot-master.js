@@ -2,8 +2,6 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// 2015-01-20 / lhansen@mozilla.com
-//
 // We set up shared memory and a Barrier and distribute them to the
 // workers.  The workers then enter the barrier.  Once they've all
 // done so the master receives a callback, after which it distributes
@@ -21,15 +19,16 @@ const maxIterations = 250;	// Set to 1 for a single frame
 // The memory contains the height*width grid and extra shared space
 // for the barrier that is used to coordinate workers.
 
-const mem = new SharedInt32Array(height*width + 1 + MasterBarrier.NUMINTS);
-const sab = mem.buffer;
-const magnificationLoc = height*width;
-const barrierLoc = magnificationLoc+1; // Barrier memory follows grid memory
+const rawmem = new SharedArrayBuffer((height*width + MasterBarrier.NUMINTS)*4 + 1*8);
+const intmem = new SharedInt32Array(rawmem, 0, height*width + MasterBarrier.NUMINTS);
+const flomem = new SharedFloat64Array(rawmem, (height*width + MasterBarrier.NUMINTS)*4, 1);
+const barrierLoc = (height*width); // Within intmem
+const magnificationLoc = 0;        // Within flomem
 const barrierID = 1337;
 
 // Note, numWorkers is set by the .html document.
 
-const barrier = new MasterBarrier(mem, barrierLoc, barrierID, numWorkers, barrierCallback);
+const barrier = new MasterBarrier(intmem, barrierLoc, barrierID, numWorkers, barrierCallback);
 const sliceHeight = Math.ceil(height/numWorkers);
 
 for ( var i=0 ; i < numWorkers ; i++ ) {
@@ -41,13 +40,17 @@ for ( var i=0 ; i < numWorkers ; i++ ) {
 	    else
 		console.log(ev.data);
 	}
-    w.postMessage([sab,
+    w.postMessage([rawmem,
+		   intmem.byteOffset,
+		   intmem.length,
+		   flomem.byteOffset,
+		   flomem.length,
 		   barrierID,
 		   barrierLoc,
 		   magnificationLoc,
 		   i*sliceHeight,
 		   (i == numWorkers-1 ? height : (i+1)*sliceHeight)],
-		  [sab]);
+		  [rawmem]);
 }
 
 var magnification = 1;
@@ -59,16 +62,16 @@ function barrierCallback() {
 	timeBefore = Date.now();
     else {
 	canvasSetFromABGRBytes(document.getElementById("mycanvas"),
-			       new SharedUint8Array(sab, 0, height*width*4),
+			       new SharedUint8Array(rawmem, 0, height*width*4),
 			       height,
 			       width);
 	magnification *= magFactor;
     }
 
     if (iterations++ < maxIterations)
-	mem[magnificationLoc] = magnification;
+	flomem[magnificationLoc] = magnification;
     else {
-	mem[magnificationLoc] = (iterations++ < maxIterations) ? magnification : 0;
+	flomem[magnificationLoc] = (iterations++ < maxIterations) ? magnification : 0;
 	var time = (Date.now() - timeBefore)
 	document.getElementById("mystatus").textContent =
 	    "Number of workers: " + numWorkers + "  Compute time: " + time + "ms  Frames: " + maxIterations + "  FPS: " + (maxIterations/(time/1000));
