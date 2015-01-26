@@ -459,7 +459,7 @@ const _Par_global = this;
 WorkerPar.prototype._initialize =
     function (message) {
 	var [_, sab, byteOffset, identity, barrierLoc, barrierID, opLoc, funcLoc, sizeLoc, nextLoc, limLoc, nextArgLoc, argLimLoc] = message;
-	this.iab = new SharedInt32Array(sab, byteOffset, MasterPar.NUMINTS);
+	this.iab = new SharedInt32Array(sab, byteOffset);
 	this._barrier = new WorkerBarrier(this.iab, barrierLoc, barrierID);
 	this._identity = identity;
 	this._opLoc = opLoc;

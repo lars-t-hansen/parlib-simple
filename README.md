@@ -16,3 +16,8 @@ The data structures provided here are:
 * asymmetric master/worker barrier synchronization (asymmetric-barrier.js)
 
 See doc/ for tutorials, etc.
+
+See demo/ for some programs that use these data structures.
+
+See test/ for more programs, not tutorial in nature, that use these
+data structures.
