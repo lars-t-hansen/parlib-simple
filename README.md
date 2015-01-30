@@ -6,6 +6,9 @@ client code (and thus providing minimal help with data abstraction and
 so on).  The fact that shared memory is provided as flat arrays of
 primitive values is exposed in all constructors, for example.
 
+(**NOTE**, at present these require a slightly patched Firefox to run.  See
+https://github.com/lars-t-hansen/atomics-queue for instructions.)
+
 The data structures provided here are:
 
 * locks and condition variables (lock.js)
