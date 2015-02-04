@@ -17,6 +17,7 @@ The data structures provided here are:
 * shared-memory "bump" memory allocator (bump-alloc.js)
 * load-balancing data parallel framework (par.js)
 * asymmetric master/worker barrier synchronization (asymmetric-barrier.js)
+* atomics polyfill for SharedFloat64Array (float64atomics.js)
 
 See doc/ for tutorials, etc.
 
