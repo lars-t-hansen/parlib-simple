@@ -58,7 +58,7 @@ function ready2() {
 }
 
 function doStep() {
-    console.log("Step " + (steps+1));
+    msg("Step " + (steps+1));
     var r1 = Math.floor(Math.random() * 100) * (steps % 2 ? -1 : 1);
     var r2 = Math.floor(Math.random() * 100) * (steps % 2 ? -1 : 1);
     Par.invoke(stepDone, "computeStep", [[0,height], [0,width]], array, r1, r2);
@@ -76,21 +76,21 @@ function stepDone() {
 	    var item = array[h*width+w];
 	    if (item != expected)
 		if (++failures < 10)
-		    console.log("Step " + steps + ": Failed @ " + h + ", " + w + ": " + item);
+		    msg("Step " + steps + ": Failed @ " + h + ", " + w + ": " + item);
 	}
 
     // Check the padding
     for ( var i=0 ; i < padding ; i++ ) {
 	if (mem[i] != 0x0F0E0D0C)
 	    if (++failures < 10)
-		console.log("Step " + steps + ": Padding failed @ " + i + ": " + mem[i].toString(16));
+		msg("Step " + steps + ": Padding failed @ " + i + ": " + mem[i].toString(16));
 	if (mem[mem.length-1-i] != 0x0C0D0E0F)
 	    if (++failures < 10)
-		console.log("Step " + steps + ": Padding failed @ " + mem.length-1-i + ": " + mem[mem.length-1-i].toString(16));
+		msg("Step " + steps + ": Padding failed @ " + mem.length-1-i + ": " + mem[mem.length-1-i].toString(16));
     }
 
     if (failures == 0 && steps < maxSteps)
 	doStep();
     else
-	console.log("Done");
+	msg("Done");
 }

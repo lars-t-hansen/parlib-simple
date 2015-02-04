@@ -33,7 +33,7 @@ function runTest() {
         var w = new Worker("test-buffer-worker.js");
         w.onmessage =
             function (ev) {
-                console.log(String(ev.data));
+                msg(String(ev.data));
                 if (ev.data.indexOf("ready ") == 0) {
                     ++readies;
                     if (readies == numWorkers)
@@ -46,7 +46,7 @@ function runTest() {
 }
 
 function consumer() {
-    console.log("running: master");
+    msg("running: master");
 
     var consumed = 0;
     var check = new Int32Array(numWorkers*numElem);
@@ -55,9 +55,9 @@ function consumer() {
         check[elt]++;
         ++consumed;
     }
-    console.log("Checking " + numWorkers*numElem + " elements");
+    msg("Checking " + numWorkers*numElem + " elements");
     for ( var i=0 ; i < numWorkers*numElem ; i++ )
         if (check[i] != 1)
-            console.log("Failed at element " + i + ": " + check[i]);
-    console.log("done: master");
+            msg("Failed at element " + i + ": " + check[i]);
+    msg("done: master");
 }
