@@ -64,14 +64,33 @@
 
 function Marshaler() {
     var tmp = new ArrayBuffer(8);
+
+    // Known SharedArrayBuffers: a SAB with ID i is at element i in
+    // this array.  The array is not necessarily dense.
     this._knownSAB = [];
+
+    // New SharedArrayBuffers being seen during a possibly recursive
+    // invocation of the marshaler.  This holds {sab,id} objects.  A
+    // given sab appears at most once in the list, and when it does,
+    // _knownSAB[id] == sab.
     this._newSAB = [];
+
+    // Temps for serializing / deserializing floats.
     this._itmp = new Int32Array(tmp);
     this._ftmp = new Float64Array(tmp);
-    this._ids = {};
-    this._handlers = {};
-    // Custom tags start at 256, but in addition bit is always set.
+
+    // Custom tags (for toMarshaled) have bit 7 set, and a subtag in
+    // bits 8-31.  _nextID is the next value of that subtag.  The
+    // range of subtags is not necessarily dense.
     this._nextID = 256;
+
+    // Map from string IDs to custom tags.
+    this._ids = {};
+
+    // Map from custom tags to functions or null/undefined.
+    this._handlers = {};
+
+    // Reentrancy counter for the marshaler.
     this._counter = 0;
 }
 
