@@ -38,6 +38,25 @@
 // For objects, all enumerable non-function-valued 'own' properties
 // are transmitted but prototype objects are not and prototype
 // relationships are lost.
+//
+// The marshaler is extensible, as follows.
+//
+// An object value's toMarshaled() method, if present, will be invoked
+// with the marshaler as its argument, and must return an array of
+// integer values representing the marshaled value.  (Recursive
+// invocations of the marshaler's marshal() method will return an
+// empty newSAB value, which can be ignored.)  The first value of that
+// array must be a unique identifying tag.
+//
+// The tag is created by calling Marshaler.generateID() in one agent
+// and registered in other agents by calling Marshaler.registerID() in
+// others.
+//
+// When a tag is created or registered it can be associated with an
+// unmarshaler function.  When an object with that tag is to be
+// unmarshaled the registered handler will be invoked on the
+// unmarshaler object and on an array containing the same integer
+// values (including the tag) that were returned from the marshaling.
 
 "use strict";
 
@@ -46,8 +65,14 @@
 function Marshaler() {
     var tmp = new ArrayBuffer(8);
     this._knownSAB = [];
+    this._newSAB = [];
     this._itmp = new Int32Array(tmp);
     this._ftmp = new Float64Array(tmp);
+    this._ids = {};
+    this._handlers = {};
+    // Custom tags start at 256, but in addition bit is always set.
+    this._nextID = 256;
+    this._counter = 0;
 }
 
 // Private tag values representing object types.
@@ -95,16 +120,28 @@ const _MARSHAL_TAG_F64 = 9;
 // SharedArrayBuffers (but not SharedTypedArrays) that are marshaled
 // several times from the same marshaling object to the same
 // unmarshaling object will unmarshal as identical objects.
+//
+// The array of int32 values has no header: two such arrays can be
+// catenated and still represent a valid sequence of marshaled values.
 
 Marshaler.prototype.marshal =
     function (values) {
 	var argValues = [];
-	var newSAB = [];
 	var vno = 0;
 	var self = this;
 
-	values.forEach(pushValue)
-	return { values: argValues, newSAB };
+	try {
+	    var newSAB = [];
+	    if (this._counter == 0)
+		this._newSAB = newSAB;
+	    this._counter++;
+
+	    values.forEach(pushValue)
+	    return { values: argValues, newSAB };
+	}
+	finally {
+	    this._counter--;
+	}
 
 	function pushValue(v) {
 	    pushArg(v);
@@ -151,6 +188,17 @@ Marshaler.prototype.marshal =
 			k |= (v.charCodeAt(i++) << 16);
 		    argValues.push(k);
 		}
+		return;
+	    }
+
+	    if ((typeof v == 'object' || typeof v == 'function') && typeof v.toMarshaled == 'function') {
+		var values = v.toMarshaled(self);
+		if (!(Array.isArray(values) && self._handlers.hasOwnProperty(values[0])))
+		    throw new Error("toMarshaled did not return a valid encoding for " + v);
+		argValues.push(values[0]);
+		argValues.push(values.length-1);
+		for ( var i=1 ; i < values.length ; i++ )
+		    argValues.push(values[i]);
 		return;
 	    }
 
@@ -277,7 +325,7 @@ Marshaler.prototype.marshal =
 		    return i;
 	    var id = self._knownSAB.length;
 	    self._knownSAB.push(sab);
-	    newSAB.push({sab, id});
+	    self._newSAB.push({sab, id});
 	    return id;
 	}
     };
@@ -456,6 +504,19 @@ Marshaler.prototype.unmarshal =
 		}
 		return o;
 	    default:
+		if (self._handlers[tag]) {
+		    check(1);
+		    var numvalues = M[index++];
+		    check(numvalues);
+		    var vals = [tag];
+		    for ( var i=0 ; i < numvalues ; i++ )
+			vals.push(M[index++]);
+		    return self._handlers[tag](self, vals);
+		}
+
+		if (self._handlers.hasOwnProperty(tag))
+		    throw new Error("No unmarshaler registered for type " + self._id[tag]);
+
 		throw new Error("Bad data tag: " + tag);
 	    }
 	}
@@ -464,4 +525,39 @@ Marshaler.prototype.unmarshal =
 	    if (index+n > limit)
 		throw new Error("Out-of-bounds reference in marshaled data at location " + index + "; need " + n + ", have " + (limit-index));
 	}
+    };
+
+// Generate a new ID for custom marshaling.  The tag (a string) is
+// used for information only, but must be globally unique.  ID
+// generation is not coordinated globally however; the agent must
+// itself transmit IDs and tags to other agents for registration.
+//
+// The handler is null/undefined or a function.  If null/undefined,
+// then this agent will not be able to receive objects encoded with
+// the generated ID.
+
+Marshaler.prototype.generateID =
+    function (tag, handler) {
+	if (this._ids.hasOwnProperty(tag))
+	    throw new Error("The marshaling tag " + tag + " is already known.");
+	var id = (this._nextID++ | 128);
+	if (this._handlers[id])
+	    throw new Error("The marshaling ID " + id + " is already known (should not happen).");
+	this._ids[tag] = id;
+	this._handlers[id] = handler;
+	return id;
+    };
+
+// Register an existing ID for custom marshaling.  See above.
+
+Marshaler.prototype.registerID =
+    function (tag, id, handler) {
+	if (this._ids.hasOwnProperty(tag))
+	    throw new Error("The marshaling tag " + tag + " is already known.");
+	if (this._handlers[id])
+	    throw new Error("The marshaling ID " + id + " is already known.");
+	this._ids[tag] = id;
+	this._handlers[id] = handler;
+	if ((id & ~128) > this._nextID)
+	    this._nextID = (id & ~128);
     };

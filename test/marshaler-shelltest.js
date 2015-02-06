@@ -8,6 +8,26 @@ load("../src/marshaler.js");
 
 var m1 = new Marshaler();
 var m2 = new Marshaler();
+var global = this;
+
+// Illustrate the extensible marshaling by passing a function (as source code).
+
+var FuncID = m1.generateID("function", null);
+
+m2.registerID("function",
+	      FuncID,
+	      function (m, vs) {
+		  // Could eval as function definition, but function expression is
+		  // cleaner for the purposes of testing.
+		  return global.eval("(" + m.unmarshal(vs, 1, vs.length-1)[0] + ")");
+	      });
+
+Function.prototype.toMarshaled =
+    function (m) {
+	var { values, newSAB } = m.marshal([this.toSource()]);
+	values.unshift(FuncID);
+	return values;
+    };
 
 var s1 = new SharedArrayBuffer(100);
 var s2 = new SharedArrayBuffer(200);
@@ -25,7 +45,14 @@ var t1 = [undefined, null, true, false,
 	  37, Math.PI, "foobar", "basic",
 	  s1, s1, s2, i1,
 	  f1, ab, i32a, u8a,
-	  a0, o0 ];
+	  a0, o0, fib ];
+
+function fib(n) {
+    if (n < 2)
+	return n;
+    return fib(n-1) + fib(n-2);
+}
+
 var v = m1.marshal(t1);
 
 assertEq(v.newSAB.length, 2);
@@ -83,5 +110,8 @@ assertEq(3 in t2[16], false);
 for ( var k in o0 ) {
     assertEq(t2[17].hasOwnProperty(k), true);
 }
+
+assertEq(typeof t2[18], 'function');
+assertEq(t2[18](10), 55);  // fib(10) => 55
 
 print("Done");
