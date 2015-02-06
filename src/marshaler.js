@@ -142,10 +142,8 @@ Marshaler.prototype.marshal =
 	    }
 
 	    if (typeof v == 'string') {
-		// TODO: Issue #10: get rid of this limit
-		if (v.length >= 0x1000000)
-		    throw new Error("String too long to be marshalled");
-		argValues.push(_MARSHAL_STRING | (v.length << 8));
+		argValues.push(_MARSHAL_STRING);
+		argValues.push(v.length);
 		var i = 0;
 		while (i < v.length) {
 		    var k = v.charCodeAt(i++);
@@ -418,7 +416,8 @@ Marshaler.prototype.unmarshal =
 	    case _MARSHAL_NULL:
 		return null;
 	    case _MARSHAL_STRING:
-		var len = (tag >>> 8);
+		check(1);
+		var len = M[index++];
 		var i = 0;
 		var s = "";
 		check(Math.ceil(len / 2));
