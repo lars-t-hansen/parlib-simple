@@ -20,9 +20,24 @@
 //  - string
 //  - SharedArrayBuffer
 //  - SharedTypedArray
+//  - Array
+//  - ArrayBuffer
+//  - TypedArray
+//  - Objects
 //
 // Only shared array types are passed by reference, all other types
 // are copied.
+//
+// Sharing for copied types is not honored, and if a copied datum is
+// marshaled twice it is unmarshaled as two distinct objects.
+//
+// Holes in arrays are preserved but very sparse arrays are not (yet)
+// handled well, one value is transmitted per element in the range of
+// the array.
+//
+// For objects, all enumerable non-function-valued 'own' properties
+// are transmitted but prototype objects are not and prototype
+// relationships are lost.
 
 "use strict";
 
@@ -37,27 +52,31 @@ function Marshaler() {
 
 // Private tag values representing object types.
 
-const _MARSHAL_I32 = 1;
-const _MARSHAL_F64 = 2;
-const _MARSHAL_SAB = 3;
-const _MARSHAL_STA = 4;
-const _MARSHAL_BOOL = 5;
-const _MARSHAL_UNDEF = 6;
-const _MARSHAL_NULL = 7;
+const _MARSHAL_I32    = 1;
+const _MARSHAL_F64    = 2;
+const _MARSHAL_SAB    = 3;
+const _MARSHAL_STA    = 4;
+const _MARSHAL_BOOL   = 5;
+const _MARSHAL_UNDEF  = 6;
+const _MARSHAL_NULL   = 7;
 const _MARSHAL_STRING = 8;
+const _MARSHAL_OBJECT = 9;
+const _MARSHAL_ARRAY  = 10;
+const _MARSHAL_TA     = 11;
+const _MARSHAL_AB     = 12;
+const _MARSHAL_HOLE   = 13;
 
-// Private tag values representing shared array types.
+// Private tag values representing shared and unshared array types.
 
-const _MARSHAL_TAG_SAB = 1;
-const _MARSHAL_TAG_I8 = 2;
-const _MARSHAL_TAG_U8 = 3;
-const _MARSHAL_TAG_CU8 = 4;
-const _MARSHAL_TAG_I16 = 5;
-const _MARSHAL_TAG_U16 = 6;
-const _MARSHAL_TAG_I32 = 7;
-const _MARSHAL_TAG_U32 = 8;
-const _MARSHAL_TAG_F32 = 9;
-const _MARSHAL_TAG_F64 = 10;
+const _MARSHAL_TAG_I8  = 1;
+const _MARSHAL_TAG_U8  = 2;
+const _MARSHAL_TAG_CU8 = 3;
+const _MARSHAL_TAG_I16 = 4;
+const _MARSHAL_TAG_U16 = 5;
+const _MARSHAL_TAG_I32 = 6;
+const _MARSHAL_TAG_U32 = 7;
+const _MARSHAL_TAG_F32 = 8;
+const _MARSHAL_TAG_F64 = 9;
 
 // Given a dense array of JS values, return an object with two fields:
 //
@@ -84,11 +103,16 @@ Marshaler.prototype.marshal =
 	var vno = 0;
 	var self = this;
 
-	values.forEach(pushArg)
+	values.forEach(pushValue)
 	return { values: argValues, newSAB };
 
+	function pushValue(v) {
+	    pushArg(v);
+	    vno++;
+	}
+
 	function pushArg(v) {
-	    if (+v === v) {
+	    if (typeof v == 'number') {
 		if ((v|0) === v) {
 		    argValues.push(_MARSHAL_I32);
 		    argValues.push(v);
@@ -99,25 +123,21 @@ Marshaler.prototype.marshal =
 		    argValues.push(self._itmp[0]);
 		    argValues.push(self._itmp[1]);
 		}
-		++vno;
 		return;
 	    }
 
 	    if (v === undefined) {
 		argValues.push(_MARSHAL_UNDEF);
-		++vno;
 		return;
 	    }
 
 	    if (v === null) {
 		argValues.push(_MARSHAL_NULL);
-		++vno;
 		return;
 	    }
 
 	    if (v === true || v === false) {
 		argValues.push(_MARSHAL_BOOL | (v ? 256 : 0));
-		++vno;
 		return;
 	    }
 
@@ -133,44 +153,124 @@ Marshaler.prototype.marshal =
 			k |= (v.charCodeAt(i++) << 16);
 		    argValues.push(k);
 		}
-		++vno;
+		return;
+	    }
+
+	    var header = 0;
+	    if (v instanceof Int8Array)
+		header = (_MARSHAL_TAG_I8 << 8) | _MARSHAL_TA;
+	    else if (v instanceof Uint8Array)
+		header = (_MARSHAL_TAG_U8 << 8) | _MARSHAL_TA;
+	    else if (v instanceof Uint8ClampedArray)
+		header = (_MARSHAL_TAG_CU8 << 8) | _MARSHAL_TA;
+	    else if (v instanceof Int16Array)
+		header = (_MARSHAL_TAG_I16 << 8) | _MARSHAL_TA;
+	    else if (v instanceof Uint16Array)
+		header = (_MARSHAL_TAG_U16 << 8) | _MARSHAL_TA;
+	    else if (v instanceof Int32Array)
+		header = (_MARSHAL_TAG_I32 << 8) | _MARSHAL_TA;
+	    else if (v instanceof Uint32Array)
+		header = (_MARSHAL_TAG_U32 << 8) | _MARSHAL_TA;
+	    else if (v instanceof Float32Array)
+		header = (_MARSHAL_TAG_F32 << 8) | _MARSHAL_TA;
+	    else if (v instanceof Float64Array)
+		header = (_MARSHAL_TAG_F64 << 8) | _MARSHAL_TA;
+
+	    if (v instanceof ArrayBuffer || header != 0) {
+		// One can optimize this if the payload length is
+		// divisible by 4 and starts on a 4-byte boundary.
+		var tmp;
+		if (header != 0) {
+		    argValues.push(header);
+		    argValues.push(v.length * v.BYTES_PER_ELEMENT);
+		    tmp = new Uint8Array(v.buffer, v.byteOffset, v.length * v.BYTES_PER_ELEMENT);
+		}
+		else {
+		    argValues.push(_MARSHAL_AB);
+		    argValues.push(v.byteLength);
+		    tmp = new Uint8Array(v);
+		}
+		for ( var i=0, lim=tmp.length & ~3 ; i < lim ; i += 4) {
+		    var x = (tmp[i] << 24) | (tmp[i+1] << 16) | (tmp[i+2] << 8) | tmp[i+3];
+		    argValues.push(x);
+		}
+		if (i < tmp.length) {
+		    var x = 0;
+		    for ( ; i < tmp.length ; i++ )
+			x = (x << 8) | tmp[i];
+		    argValues.push(x);
+		}
 		return;
 	    }
 
 	    if (v instanceof SharedArrayBuffer) {
 		argValues.push(_MARSHAL_SAB);
 		argValues.push(lookupOrRegisterSAB(v));
-		++vno;
 		return;
 	    }
 
-	    var tag = 0;
+	    var header = 0;
 	    if (v instanceof SharedInt8Array)
-		tag = _MARSHAL_TAG_I8;
+		header = (_MARSHAL_TAG_I8 << 8) | _MARSHAL_STA;
 	    else if (v instanceof SharedUint8Array)
-		tag = _MARSHAL_TAG_U8;
+		header = (_MARSHAL_TAG_U8 << 8) | _MARSHAL_STA;
 	    else if (v instanceof SharedUint8ClampedArray)
-		tag = _MARSHAL_TAG_CU8;
+		header = (_MARSHAL_TAG_CU8 << 8) | _MARSHAL_STA;
 	    else if (v instanceof SharedInt16Array)
-		tag = _MARSHAL_TAG_I16;
+		header = (_MARSHAL_TAG_I16 << 8) | _MARSHAL_STA;
 	    else if (v instanceof SharedUint16Array)
-		tag = _MARSHAL_TAG_U16;
+		header = (_MARSHAL_TAG_U16 << 8) | _MARSHAL_STA;
 	    else if (v instanceof SharedInt32Array)
-		tag = _MARSHAL_TAG_I32;
+		header = (_MARSHAL_TAG_I32 << 8) | _MARSHAL_STA;
 	    else if (v instanceof SharedUint32Array)
-		tag = _MARSHAL_TAG_U32;
+		header = (_MARSHAL_TAG_U32 << 8) | _MARSHAL_STA;
 	    else if (v instanceof SharedFloat32Array)
-		tag = _MARSHAL_TAG_F32;
+		header = (_MARSHAL_TAG_F32 << 8) | _MARSHAL_STA;
 	    else if (v instanceof SharedFloat64Array)
-		tag = _MARSHAL_TAG_F64;
-	    else
-		throw new Error("Argument #" + vno + " is of unsupported type: " + v);
+		header = (_MARSHAL_TAG_F64 << 8) | _MARSHAL_STA;
 
-	    argValues.push(_MARSHAL_STA | (tag << 8));
-	    argValues.push(lookupOrRegisterSAB(v.buffer));
-	    argValues.push(v.byteOffset);
-	    argValues.push(v.length);
-	    ++vno;
+	    if (header != 0) {
+		argValues.push(header);
+		argValues.push(lookupOrRegisterSAB(v.buffer));
+		argValues.push(v.byteOffset);
+		argValues.push(v.length);
+		return;
+	    }
+
+	    if (Array.isArray(v)) {
+		argValues.push(_MARSHAL_ARRAY);
+		argValues.push(v.length);
+		for ( var i=0 ; i < v.length ; i++ ) {
+		    if (v.hasOwnProperty(i))
+			pushArg(v[i]);
+		    else
+			argValues.push(_MARSHAL_HOLE);
+		}
+		return;
+	    }
+
+	    if (typeof v == 'object') {
+		argValues.push(_MARSHAL_OBJECT);
+		var keys = [];
+		var values = [];
+		for ( var k in v ) {
+		    if (v.hasOwnProperty(k)) {
+			var val = v[k];
+			if (typeof val != 'function') {
+			    keys.push(k);
+			    values.push(val);
+			}
+		    }
+		}
+		argValues.push(keys.length);
+		for ( var i=0 ; i < keys.length ; i++ ) {
+		    pushArg(keys[i]);
+		    pushArg(values[i]);
+		}
+		return;
+	    }
+
+	    throw new Error("Argument #" + vno + " is of unsupported type: " + v);
 	}
 
 	function lookupOrRegisterSAB(sab) {
@@ -250,6 +350,42 @@ Marshaler.prototype.unmarshal =
 		self._itmp[0] = M[index++];
 		self._itmp[1] = M[index++];
 		return self._ftmp[0];
+	    case _MARSHAL_AB:
+	    case _MARSHAL_TA:
+		check(1);
+		var bytelen = M[index++];
+		var ab = new ArrayBuffer(bytelen);
+		check(Math.ceil(bytelen/4));
+		var tmp = new Uint8Array(ab);
+		for ( var i=0, lim=bytelen & ~3 ; i < lim ; i+= 4 ) {
+		    var x = M[index++];
+		    tmp[i+3] = x; x >>= 8;
+		    tmp[i+2] = x; x >>= 8;
+		    tmp[i+1] = x; x >>= 8;
+		    tmp[i+0] = x; x >>= 8;
+		}
+		if (bytelen & 3) {
+		    var x = M[index++];
+		    var k = bytelen & 3;
+		    while (k-- > 0) {
+			tmp[i+k] = x;
+			x >>= 8;
+		    }
+		}
+		if (tag == _MARSHAL_AB)
+		    return ab;
+		switch (tag >> 8) {
+		case _MARSHAL_TAG_I8:  return new Int8Array(ab);
+		case _MARSHAL_TAG_U8:  return tmp;
+		case _MARSHAL_TAG_CU8: return new Uint8ClampedArray(ab);
+		case _MARSHAL_TAG_I16: return new Int16Array(ab);
+		case _MARSHAL_TAG_U16: return new Uint16Array(ab);
+		case _MARSHAL_TAG_I32: return new Int32Array(ab);
+		case _MARSHAL_TAG_U32: return new Uint32Array(ab);
+		case _MARSHAL_TAG_F32: return new Float32Array(ab);
+		case _MARSHAL_TAG_F64: return new Float64Array(ab);
+		default: throw new Error("Bad TypedArray typetag: " + (tag >> 8).toString(16));
+		}
 	    case _MARSHAL_SAB:
 		check(1);
 		var sab = self._knownSAB[M[index++]];
@@ -273,7 +409,7 @@ Marshaler.prototype.unmarshal =
 		case _MARSHAL_TAG_U32: return new SharedUint32Array(sab, byteOffset, length);
 		case _MARSHAL_TAG_F32: return new SharedFloat32Array(sab, byteOffset, length);
 		case _MARSHAL_TAG_F64: return new SharedFloat64Array(sab, byteOffset, length);
-		default: throw new Error("Bad array typetag: " + (tag >> 8).toString(16));
+		default: throw new Error("Bad SharedTypedArray typetag: " + (tag >> 8).toString(16));
 		}
 	    case _MARSHAL_BOOL:
 		return !!(tag >> 8);
@@ -296,6 +432,30 @@ Marshaler.prototype.unmarshal =
 		    i++;
 		}
 		return s;
+	    case _MARSHAL_ARRAY:
+		check(1);
+		var len = M[index++];
+		var a = new Array(len);
+		for ( var i=0 ; i < len ; i++ ) {
+		    check(1);
+		    if (M[index] == _MARSHAL_HOLE)
+			index++;
+		    else
+			a[i] = parseArg();
+		}
+		return a;
+	    case _MARSHAL_OBJECT:
+		check(1);
+		var numprops = M[index++];
+		var o = {};
+		for ( var i=0 ; i < numprops ; i++ ) {
+		    check(1);
+		    var key = parseArg();
+		    check(1);
+		    var value = parseArg();
+		    o[key] = value;
+		}
+		return o;
 	    default:
 		throw new Error("Bad data tag: " + tag);
 	    }
