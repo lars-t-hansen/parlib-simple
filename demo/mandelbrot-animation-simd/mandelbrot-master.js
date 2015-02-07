@@ -34,7 +34,13 @@ function setupMandelbrot() {
 }
 
 function doMandelbrot() {
-    Par.invoke(showMandelbrot, "mandelbrot_asm_simd", [[0,height], [0,width]], mem, magnification);
+    Par.invoke(showMandelbrot, "mandelbrot_" + mode, [[0,height], [0,width]], mem, magnification);
+}
+
+function setMode(new_mode) {
+    mode = new_mode;
+    // if (iterations > 0)
+    // 	timeBefore = Date.now();
 }
 
 function showMandelbrot() {
@@ -51,8 +57,15 @@ function showMandelbrot() {
     else {
 	var t = Date.now() - timeBefore;
 	var fps = Math.round((iterations/(t/1000))*10)/10;
-	document.getElementById('mystatus').innerHTML = "Number of workers: " + numWorkers + "  Compute time: " + t + "ms  FPS=" + fps;
+	document.getElementById('mystatus').innerHTML =
+	    "Mode: " + mode +
+	    "Number of workers: " + numWorkers + "  Compute time: " + t + "ms  FPS=" + fps;
     }
+
+    // Fixme: we want a notion of running FPS, and once we get to the bottom we want to zoom out again,
+    // and just keep going, so that one can change between settings.  Also pause/continue will be very
+    // useful, and it should be possible to click radio buttons while paused.
+
     canvasSetFromABGRBytes(document.getElementById("mycanvas"),
 			   new SharedUint8Array(rawmem, memnow.byteOffset, height*width*4),
 			   height,

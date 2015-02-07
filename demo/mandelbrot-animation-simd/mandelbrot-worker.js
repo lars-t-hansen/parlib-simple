@@ -116,7 +116,7 @@ function mandelbrot_asm_module(glob, ffi, heap) {
 		    it=(it+1)|0;
 		}
 		loc = imul(imul(Py|0, width|0) + Px|0, 4);
-		i32[(membase+loc)>>2] = it; // (it|0) == (MAXIT|0) ? 0xFF000000|0 : i32[(colbase+((it&7)<<2))>>2]|0;
+		i32[(membase+loc)>>2] = (it|0) == (MAXIT|0) ? 0xFF000000|0 : i32[(colbase+((it&7)<<2))>>2]|0;
 	    }
 	}
     }
