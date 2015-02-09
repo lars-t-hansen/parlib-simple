@@ -6,8 +6,8 @@
 
 // Animation parameters
 
-const magFactor = 1.05;
-const maxIterations = 250;
+const magFactor = 1.025;	// with 1.5 pixelation is a problem after a while, because of float32
+const maxIterations = 400;
 
 // The memory contains two height*width grids (so that we can overlap
 // display and computation) and extra shared space for the Par
@@ -25,9 +25,12 @@ const colmem = new SharedInt32Array(rawmem, colbase, 8);
 const Par = new MasterPar(memp, 0, numWorkers, "mandelbrot-worker.js", setupMandelbrot);
 
 var magnification = 1;
+var going_in = true;
 var iterations = 0;
+var fps_iterations = 0;
 var mem = mem1;
 var timeBefore;
+var lastDisplay = 0;
 
 function setupMandelbrot() {
     Par.broadcast(doMandelbrot, "setup_asm", colmem);
@@ -39,35 +42,52 @@ function doMandelbrot() {
 
 function setMode(new_mode) {
     mode = new_mode;
-    // if (iterations > 0)
-    // 	timeBefore = Date.now();
+    fps_iterations = 0;
+    if (iterations > 0)
+     	timeBefore = Date.now();
 }
 
 function showMandelbrot() {
+    var doDisplay = true;
     var memnow = mem;
-    if (iterations == 0)
-	timeBefore = Date.now();
-    if (iterations < maxIterations) {
-	iterations++;
-	magnification *= magFactor;
-	mem = (memnow == mem1) ? mem2 : mem1;
-	// Overlap display of this frame with computation of the next.
-	doMandelbrot();
+    var now = Date.now();
+
+    if (iterations == 0) {
+	timeBefore = now;
+	lastDisplay = now;
+	doDisplay = false;
     }
-    else {
-	var t = Date.now() - timeBefore;
-	var fps = Math.round((iterations/(t/1000))*10)/10;
+
+    iterations++;
+    fps_iterations++;
+    if (iterations == maxIterations) {
+	going_in = !going_in;
+	iterations = 1;
+    }
+
+    if (going_in)
+	magnification *= magFactor;
+    else
+	magnification /= magFactor;
+
+    mem = (memnow == mem1) ? mem2 : mem1;
+
+    // Overlap display of this frame with computation of the next.
+    doMandelbrot();
+
+    if (now - lastDisplay >= 1000) {
+	lastDisplay = now;
+	var t = now - timeBefore;
+	var fps = Math.round((fps_iterations/(t/1000))*10)/10;
 	document.getElementById('mystatus').innerHTML =
-	    "Mode: " + mode +
+	    "Mode: " + mode + " " +
 	    "Number of workers: " + numWorkers + "  Compute time: " + t + "ms  FPS=" + fps;
     }
 
-    // Fixme: we want a notion of running FPS, and once we get to the bottom we want to zoom out again,
-    // and just keep going, so that one can change between settings.  Also pause/continue will be very
-    // useful, and it should be possible to click radio buttons while paused.
-
-    canvasSetFromABGRBytes(document.getElementById("mycanvas"),
-			   new SharedUint8Array(rawmem, memnow.byteOffset, height*width*4),
-			   height,
-			   width);
+    if (doDisplay) {
+	canvasSetFromABGRBytes(document.getElementById("mycanvas"),
+			       new SharedUint8Array(rawmem, memnow.byteOffset, height*width*4),
+			       height,
+			       width);
+    }
 }
