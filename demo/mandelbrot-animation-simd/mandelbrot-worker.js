@@ -16,9 +16,6 @@ onmessage =
 	    postMessage("Unknown: " + ev.data);
     };
 
-// Maximum iterations per pixel.
-const MAXIT = 200;
-
 // Colors are ABGR with A=255.
 const colors = [0xFFFF0700, 0xFF2a2aa5, 0xFFFFff00, 0xFFa19eff,
 		0xFF00eefd, 0xFF008000, 0xFFFAFEFE, 0xFF00FFBF];
@@ -69,6 +66,7 @@ function mandelbrot_asm_module(glob, ffi, heap) {
     var i32 = new glob.SharedInt32Array(heap);
     var imul = glob.Math.imul;
     var toF = glob.Math.fround;
+    const MAXIT = ffi.MAXIT|0;
 
     function mbrot(ybase, ylimit, xbase, xlimit, width, height, g_center_y, g_center_x, membase, colbase, magnification) {
 	ybase = ybase|0;
@@ -95,8 +93,6 @@ function mandelbrot_asm_module(glob, ffi, heap) {
 	var it = 0;
 	var xtemp = toF(0);
 	var loc = 0;
-	var MAXIT = 0;
-	MAXIT = 200;
 	g_top = toF(g_center_y + toF(toF(1)/magnification));
 	g_bottom = toF(g_center_y - toF(toF(1)/magnification));
 	g_left = toF(g_center_x - toF(toF(toF(width|0) / toF(height|0)) * toF(toF(1)/magnification)));
@@ -131,7 +127,7 @@ var mandelbrot_asm =
 	return function (ybase, ylimit, xbase, xlimit, mem, magnification) {
 	    if (!kernel) {
 		buffer = mem.buffer;
-		kernel = mandelbrot_asm_module(glob, {}, buffer);
+		kernel = mandelbrot_asm_module(glob, {MAXIT:glob.MAXIT}, buffer);
 	    }
 	    else if (mem.buffer != buffer)
 		throw new Error("Only one shared buffer allowed with the asm.js code");
@@ -155,11 +151,10 @@ function mandelbrot_asm_simd_module(glob, ffi, heap) {
     var f4mul = f4.mul;
     var f4lessThan = f4.lessThan;
     var f4splat = f4.splat;
-    var print = ffi.print;
     const one4 = i4(1,1,1,1);
     const two4 = f4(2,2,2,2);
     const four4 = f4(4,4,4,4);
-    const MAXIT = 200;
+    const MAXIT = ffi.MAXIT|0;
 
     function mbrot(ybase, ylimit, xbase, xlimit, width, height, g_center_y, g_center_x, membase, colbase, magnification) {
 	ybase = ybase|0;
@@ -273,7 +268,6 @@ function mandelbrot_asm_simd_module(glob, ffi, heap) {
 	var it = 0;
 	var xtemp = toF(0);
 	var loc = 0;
-	var MAXIT = 200;
 	for ( Px=xbase ; (Px|0) < (xlimit|0) ; Px=(Px+1)|0 ) {
 	    x0 = toF(g_left + toF(toF(toF(Px|0) / toF(width|0)) * toF(g_right - g_left)));
 	    y0 = toF(g_bottom + toF(toF(toF(Py|0) / toF(height|0)) * toF(g_top - g_bottom)));
@@ -302,7 +296,7 @@ var mandelbrot_asm_simd =
 	return function (ybase, ylimit, xbase, xlimit, mem, magnification) {
 	    if (!kernel) {
 		buffer = mem.buffer;
-		kernel = mandelbrot_asm_simd_module(glob, {print:function (x) { glob.postMessage(String(x)) }}, buffer);
+		kernel = mandelbrot_asm_simd_module(glob, {MAXIT:glob.MAXIT}, buffer);
 	    }
 	    else if (mem.buffer != buffer)
 		throw new Error("Only one shared buffer allowed with the asm.js code");
