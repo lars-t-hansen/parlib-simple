@@ -43,7 +43,7 @@ function runTest() {
 		if (Array.isArray(ev.data) && ev.data[0] === "MasterBarrier.dispatch")
 		    MasterBarrier.dispatch(ev.data);
                 else
-                    console.log(String(ev.data));
+                    msg(String(ev.data));
             };
         w.postMessage([sab, numIter, barrierIdx, barrierID, addendIdx, segmentSize*id, segmentSize], [sab]);
     }
@@ -58,10 +58,10 @@ function barrierReady() {
 	barrier.release();
     }
     else {
-	console.log("Checking " + numWorkers*segmentSize + " elements");
+	msg("Checking " + numWorkers*segmentSize + " elements");
 	for ( var i=0 ; i < numWorkers*segmentSize ; i++ )
             if (dab[i] != expected)
-		console.log("Failed at element " + i + ": " + dab[i] + " " + expected);
-	console.log("done: master");
+		msg("Failed at element " + i + ": " + dab[i] + " " + expected);
+	msg("done: master");
     }
 }

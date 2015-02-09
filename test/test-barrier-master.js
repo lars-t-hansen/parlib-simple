@@ -3,7 +3,6 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // Test the Barrier type.
-// 2015-01-12 / lhansen@mozilla.com
 //
 // Create K workers that each add their ID to the elements in the
 // range of a shared array, and then enter a barrier.  On the next
@@ -36,7 +35,7 @@ function runTest() {
         var w = new Worker("test-barrier-worker.js");
         w.onmessage =
             function (ev) {
-                console.log(String(ev.data));
+                msg(String(ev.data));
                 if (ev.data.indexOf("ready ") == 0) {
                     ++readies;
                     if (readies == numWorkers)
@@ -52,9 +51,9 @@ function runTest() {
 }
 
 function worker() {
-    console.log("running: master");
+    msg("running: master");
     var myID = numWorkers+1;
-    
+
     // Note this code assumes bufIdx == 0
     var seg = (myID - 1);
     for ( var i=0 ; i < numSegments ; i++ ) {
@@ -68,11 +67,11 @@ function worker() {
 	seg = (seg+1) % numSegments;
 	barrier.enter();
     }
-    
-    console.log("Checking " + numSegments*segmentSize + " elements");
+
+    msg("Checking " + numSegments*segmentSize + " elements");
     var expect = (numSegments*(numSegments+1)/2)|0;
     for ( var i=0 ; i < numSegments*segmentSize ; i++ )
         if ((iab[i]|0) != expect)
-            console.log("Failed at element " + i + ": " + (iab[i]|0) + " " + expect);
-    console.log("done: master");
+            msg("Failed at element " + i + ": " + (iab[i]|0) + " " + expect);
+    msg("done: master");
 }

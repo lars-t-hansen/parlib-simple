@@ -25,6 +25,10 @@
  *
  */
 
+"use strict";
+
+var globalParams;		// Initialized elsewhere
+
 // Shared kernel for renderWorld sequential and worker-parallel code.
 // Apart from the parameter passing and the destructuring of
 // globalParams, this is identical to the original sequential code.

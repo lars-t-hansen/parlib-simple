@@ -3,7 +3,6 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // Test the Lock and Cond types.
-// 2015-01-12 / lhansen@mozilla.com
 //
 // Create K workers that share a single-consumer, multiple-producer
 // bounded buffer with the master.
@@ -41,7 +40,7 @@ function runTest() {
         var w = new Worker("test-lock-worker.js");
         w.onmessage =
             function (ev) {
-                console.log(String(ev.data));
+                msg(String(ev.data));
                 if (ev.data.indexOf("ready ") == 0) {
                     ++readies;
                     if (readies == numWorkers)
@@ -57,7 +56,7 @@ function runTest() {
 }
 
 function consumer() {
-    console.log("running: master");
+    msg("running: master");
 
     // Note this code assumes bufIdx == 0
     var consumed = 0;
@@ -77,9 +76,9 @@ function consumer() {
         lock.unlock();
         ++consumed;
     }
-    console.log("Checking " + numWorkers*numElem + " elements");
+    msg("Checking " + numWorkers*numElem + " elements");
     for ( var i=0 ; i < numWorkers*numElem ; i++ )
         if (check[i] != 1)
-            console.log("Failed at element " + i + ": " + check[i]);
-    console.log("done: master");
+            msg("Failed at element " + i + ": " + check[i]);
+    msg("done: master");
 }

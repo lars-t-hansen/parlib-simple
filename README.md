@@ -6,7 +6,10 @@ client code (and thus providing minimal help with data abstraction and
 so on).  The fact that shared memory is provided as flat arrays of
 primitive values is exposed in all constructors, for example.
 
-The data structures provided here are:
+(**NOTE**, at present these require a slightly patched Firefox to run.  See
+https://github.com/lars-t-hansen/atomics-queue for instructions.)
+
+The data structures and utilities provided here are:
 
 * locks and condition variables (lock.js)
 * multi-producer multi-consumer bounded buffer (buffer.js)
@@ -14,6 +17,8 @@ The data structures provided here are:
 * shared-memory "bump" memory allocator (bump-alloc.js)
 * load-balancing data parallel framework (par.js)
 * asymmetric master/worker barrier synchronization (asymmetric-barrier.js)
+* atomics polyfill for SharedFloat64Array (float64atomics.js)
+* marshaling of values through shared memory (marshaler.js)
 
 See doc/ for tutorials, etc.
 
