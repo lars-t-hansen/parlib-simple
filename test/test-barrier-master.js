@@ -28,6 +28,7 @@ var iabSize = barrierIdx + Barrier.NUMINTS;
 
 var iab = new SharedInt32Array(iabSize);
 Barrier.initialize(iab, barrierIdx, numSegments);
+var barrier = new Barrier(iab, barrierIdx);
 
 function runTest() {
     var readies = 0;
@@ -46,8 +47,6 @@ function runTest() {
         w.postMessage([iab.buffer, bufIdx, bufSize, barrierIdx, numSegments, segmentSize, id+1],
                       [iab.buffer]);
     }
-
-    barrier = new Barrier(iab, barrierIdx);
 }
 
 function worker() {
