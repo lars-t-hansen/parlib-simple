@@ -75,10 +75,15 @@ Barrier.prototype.enter =
 	const seqLoc = ibase+1;
 	const numAgentsLoc = ibase+2;
 
+	// The sequence number must be read before the check, otherwise
+	// when we wait there is the possibility that the waiting thread
+	// will read the sequence number that has been updated by the
+	// non-waiting thread, and incorrectly wait on that.
+	const seq = Atomics.load(iab, seqLoc);
 	if (Atomics.sub(iab, counterLoc, 1) == 1) {
 	    const numAgents = iab[numAgentsLoc];
-	    Atomics.store(iab, counterLoc, numAgents);
-	    Atomics.add(iab, seqLoc, 1);
+	    iab[counterLoc] = numAgents;
+	    iab[seqLoc] = seq+1;
 	    // The correctness of the wakeup call depends on the
 	    // linear-queue behavior of wait and wake: we wake the
 	    // numAgents-1 that are currently waiting, even if some
@@ -87,7 +92,6 @@ Barrier.prototype.enter =
 	    Atomics.futexWake(iab, seqLoc, numAgents-1);
 	}
 	else {
-	    const seq = Atomics.load(iab, seqLoc);
 	    Atomics.futexWait(iab, seqLoc, seq, Number.POSITIVE_INFINITY);
 	}
     };
