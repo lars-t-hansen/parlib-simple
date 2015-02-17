@@ -4,7 +4,7 @@
 
 // Atomic operations on int64 arrays.
 //
-// This polyfill provides these operations:
+// This polyfill provides these methods:
 //
 //   Atomics.int64Load
 //   Atomics.int64Store
@@ -15,29 +15,28 @@
 //   Atomics.int64Or
 //   Atomics.int64Xor
 //
-// and this utility:
+// and this getter:
 //
-//   Atomics.int64HighBits
+//   Atomics.H
+//
+// and this initialization function:
+//
+//   Atomics.int64Init
 //
 // An int64 value is represented as two int32 values.  On input, they
 // are passed as two parameters, high and low in that order.  On
 // output, the atomic ops return the low part of the result and stash
-// the high part of the result, which can be retrieved with
-// Atomics.int64HighBits().  The intent is that the JIT will be able
-// to optimize the latter operation and remove most overhead, and we
-// will not pay for an object allocation, and we will be able to use
-// (eventual) native operations within asm.js code.
+// the high part of the result, which can be retrieved with Atomics.H.
+// The intent is that the JIT will be able to optimize the latter
+// operation and remove most overhead, and we will not pay for an
+// object allocation, and we will be able to use (eventual) native
+// operations within asm.js code.
 //
 // An int64 array is represented as an int32 array of even length.  A
 // valid index into an int64 array is always even.
 //
 // In the paragraphs above, "int32" always means "int32 exclusively",
 // never "int32 or uint32".
-//
-// Common to all these methods is that they take an additional
-// SharedInt32Array and index within that array, and *may* use the
-// word(s) at that index (Atomics.NUMI64INTS words) for coordination.
-// The words should initially be zero.
 //
 // In the polyfill, if an operation throws then the coordination word
 // is left in a state where it will not impede progress of other
@@ -46,25 +45,35 @@
 
 // Implementation note: We're assuming little endian for now.
 
-if (!Atomics.hasOwnProperty("NUMI64INTS")) {
+if (!Atomics.hasOwnProperty("int64Init")) {
+
+    let iab = null;
+    let iidx = 0;
+    let stash = 0;
+
+    // int64Init must be called one with a SharedInt32Array and an
+    // index within that array that represents the start of a range of
+    // Atomics.NUMI64INTS integers.  The shared memory locations
+    // denoted by those values should be the same in all agents, and
+    // they must be initialized to zero before the first such call is
+    // made.
+
+    Atomics.int64Init = function (iab_, iidx_) {
+	iab = iab_;
+	iidx = iidx_;
+    };
 
     Atomics.NUMI64INTS = 1;
 
-    // Private; implementation artifact.  In the implementation this
-    // may be a hidden field on the global object or ideally on
-    // something that can be written in about one instruction.
-
-    Atomics._stash = 0;
-
     // Atomically load (hi,lo) from lab[lidx].  Stash hi and return lo.
 
-    Atomics.int64Load = function (lab, lidx, iab, iidx) {
+    Atomics.int64Load = function (lab, lidx) {
 	while (Atomics.compareExchange(iab, iidx, 0, -1) != 0)
 	    ;
 	try {
 	    var lo = lab[lidx];
 	    var hi = lab[lidx+1];
-	    Atomics._stash = hi;
+	    stash = hi;
 	    return lo;
 	}
 	finally {
@@ -72,15 +81,13 @@ if (!Atomics.hasOwnProperty("NUMI64INTS")) {
 	}
     };
 
-    // Return the most recent stashed value.
+    // Atomics.H: Return the most recent stashed value.
 
-    Atomics.int64HighBits = function () {
-	return Atomics._stash;
-    }
+    Object.defineProperties(Atomics, {"H": {get: function() { return stash; }}});
 
     // Atomically store (hi,lo) at lab[lidx].  Returns nothing.
 
-    Atomics.int64Store = function (lab, lidx, value_hi, value_lo, iab, iidx) {
+    Atomics.int64Store = function (lab, lidx, value_hi, value_lo) {
 	while (Atomics.compareExchange(iab, iidx, 0, -1) != 0)
 	    ;
 	try {
@@ -95,7 +102,7 @@ if (!Atomics.hasOwnProperty("NUMI64INTS")) {
     // Atomically load (hi,lo) from lab[lidx] and compare to (expected_hi,expected_lo);
     // if equal, update lab[idx] with (update_hi,update_lo).  Stash hi and return lo.
 
-    Atomics.int64CompareExchange = function (lab, lidx, expected_hi, expected_lo, update_hi, update_lo, iab, iidx) {
+    Atomics.int64CompareExchange = function (lab, lidx, expected_hi, expected_lo, update_hi, update_lo) {
 	while (Atomics.compareExchange(iab, iidx, 0, -1) != 0)
 	    ;
 	try {
@@ -105,7 +112,7 @@ if (!Atomics.hasOwnProperty("NUMI64INTS")) {
 		lab[lidx] = update_lo;
 		lab[lidx+1] = update_hi;
 	    }
-	    Atomics._stash = vhi;
+	    stash = vhi;
 	    return vlo;
 	}
 	finally {
@@ -116,7 +123,7 @@ if (!Atomics.hasOwnProperty("NUMI64INTS")) {
     // Atomically load (hi,lo) from lab[lidx]; let (r,s) = (hi,lo)+(value_hi,value_lo);
     // store (r,s) at lab[idx].  Stash hi and return lo.
 
-    Atomics.int64Add = function (lab, lidx, value_hi, value_lo, iab, iidx) {
+    Atomics.int64Add = function (lab, lidx, value_hi, value_lo) {
 	while (Atomics.compareExchange(iab, iidx, 0, -1) != 0)
 	    ;
 	try {
@@ -127,7 +134,7 @@ if (!Atomics.hasOwnProperty("NUMI64INTS")) {
 	    var carry = (lo ^ value_lo) < 0 || (rlo ^ lo) >= 0 ? 1 : 0;
 	    var rhi = (hi + value_hi + carry)
 	    lab[lidx+1] = rhi|0;
-	    Atomics._stash = hi;
+	    stash = hi;
 	    return lo;
 	}
 	finally {
@@ -138,7 +145,7 @@ if (!Atomics.hasOwnProperty("NUMI64INTS")) {
     // Atomically load (hi,lo) from lab[lidx]; let (r,s) = (hi,lo)-(value_hi,value_lo);
     // store (r,s) at lab[idx].  Stash hi and return lo.
 
-    Atomics.int64Sub = function (lab, lidx, value_hi, value_lo, iab, iidx) {
+    Atomics.int64Sub = function (lab, lidx, value_hi, value_lo) {
 	while (Atomics.compareExchange(iab, iidx, 0, -1) != 0)
 	    ;
 	try {
@@ -149,7 +156,7 @@ if (!Atomics.hasOwnProperty("NUMI64INTS")) {
 	    var borrow = (lo ^ value_lo) >= 0 || (rlo ^ lo) >= 0 ? 1 : 0;
 	    var rhi = hi - value_hi - borrow;
 	    lab[lidx+1] = rhi|0;
-	    Atomics._stash = hi;
+	    stash = hi;
 	    return lo;
 	}
 	finally {
@@ -160,7 +167,7 @@ if (!Atomics.hasOwnProperty("NUMI64INTS")) {
     // Atomically load (hi,lo) from lab[lidx]; let (r,s) = (hi,lo) & (value_hi,value_lo);
     // store (r,s) at lab[idx].  Stash hi and return lo.
 
-    Atomics.int64And = function (lab, lidx, value_hi, value_lo, iab, iidx) {
+    Atomics.int64And = function (lab, lidx, value_hi, value_lo) {
 	while (Atomics.compareExchange(iab, iidx, 0, -1) != 0)
 	    ;
 	try {
@@ -168,7 +175,7 @@ if (!Atomics.hasOwnProperty("NUMI64INTS")) {
 	    var hi = lab[lidx+1];
 	    lab[lidx] = lo & value_lo;
 	    lab[lidx+1] = hi & value_hi;
-	    Atomics._stash = hi;
+	    stash = hi;
 	    return lo;
 	}
 	finally {
@@ -179,7 +186,7 @@ if (!Atomics.hasOwnProperty("NUMI64INTS")) {
     // Atomically load (hi,lo) from lab[lidx]; let (r,s) = (hi,lo) | (value_hi,value_lo);
     // store (r,s) at lab[idx].  Stash hi and return lo.
 
-    Atomics.int64Or = function (lab, lidx, value_hi, value_lo, iab, iidx) {
+    Atomics.int64Or = function (lab, lidx, value_hi, value_lo) {
 	while (Atomics.compareExchange(iab, iidx, 0, -1) != 0)
 	    ;
 	try {
@@ -187,7 +194,7 @@ if (!Atomics.hasOwnProperty("NUMI64INTS")) {
 	    var hi = lab[lidx+1];
 	    lab[lidx] = lo | value_lo;
 	    lab[lidx+1] = hi | value_hi;
-	    Atomics._stash = hi;
+	    stash = hi;
 	    return lo;
 	}
 	finally {
@@ -198,7 +205,7 @@ if (!Atomics.hasOwnProperty("NUMI64INTS")) {
     // Atomically load (hi,lo) from lab[lidx]; let (r,s) = (hi,lo) ^ (value_hi,value_lo);
     // store (r,s) at lab[idx].  Stash hi and return lo.
 
-    Atomics.int64Xor = function (lab, lidx, value_hi, value_lo, iab, iidx) {
+    Atomics.int64Xor = function (lab, lidx, value_hi, value_lo) {
 	while (Atomics.compareExchange(iab, iidx, 0, -1) != 0)
 	    ;
 	try {
@@ -206,7 +213,7 @@ if (!Atomics.hasOwnProperty("NUMI64INTS")) {
 	    var hi = lab[lidx+1];
 	    lab[lidx] = lo ^ value_lo;
 	    lab[lidx+1] = hi ^ value_hi;
-	    Atomics._stash = hi;
+	    stash = hi;
 	    return lo;
 	}
 	finally {
