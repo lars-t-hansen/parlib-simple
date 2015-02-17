@@ -7,12 +7,14 @@ onmessage = function (ev) {
     var iab = new SharedInt32Array(sab);
     var barrier = new WorkerBarrier(iab, barrierIdx, barrierId);
 
+    Atomics.float64Init(iab, atomicIdx);
+
     postMessage("Worker ready");
     barrier.enter();
     postMessage("Worker running");
     // Test add
     for ( var i=0 ; i < iterations ; i++ )
-	Atomics.float64Add(dab, accIdx, 1.0, iab, atomicIdx);
+	Atomics.float64Add(dab, accIdx, 1.0);
     postMessage("Worker done");
     barrier.enter();
 }
