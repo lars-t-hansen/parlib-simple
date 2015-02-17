@@ -18,6 +18,7 @@ The data structures and utilities provided here are:
 * load-balancing data parallel framework (par.js)
 * asymmetric master/worker barrier synchronization (asymmetric-barrier.js)
 * atomics polyfill for SharedFloat64Array (float64atomics.js)
+* atomics polyfill for "int64" values on SharedInt32Array (int32atomics.js)
 * marshaling of values through shared memory (marshaler.js)
 
 See doc/ for tutorials, etc.
