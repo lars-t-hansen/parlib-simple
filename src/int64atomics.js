@@ -46,178 +46,180 @@
 // Implementation note: We're assuming little endian for now.
 
 if (!Atomics.hasOwnProperty("int64Init")) {
+    (function () {
+	var iab = null;
+	var iidx = 0;
+	var stash = 0;
 
-    let iab = null;
-    let iidx = 0;
-    let stash = 0;
+	// int64Init must be called one with a SharedInt32Array and an
+	// index within that array that represents the start of a range of
+	// Atomics.NUMI64INTS integers.  The shared memory locations
+	// denoted by those values should be the same in all agents, and
+	// they must be initialized to zero before the first such call is
+	// made.
 
-    // int64Init must be called one with a SharedInt32Array and an
-    // index within that array that represents the start of a range of
-    // Atomics.NUMI64INTS integers.  The shared memory locations
-    // denoted by those values should be the same in all agents, and
-    // they must be initialized to zero before the first such call is
-    // made.
+	Atomics.int64Init = function (iab_, iidx_) {
+	    iab = iab_;
+	    iidx = iidx_;
+	};
 
-    Atomics.int64Init = function (iab_, iidx_) {
-	iab = iab_;
-	iidx = iidx_;
-    };
+	Atomics.NUMI64INTS = 1;
 
-    Atomics.NUMI64INTS = 1;
+	// Atomically load (hi,lo) from lab[lidx].  Stash hi and return lo.
 
-    // Atomically load (hi,lo) from lab[lidx].  Stash hi and return lo.
-
-    Atomics.int64Load = function (lab, lidx) {
-	while (Atomics.compareExchange(iab, iidx, 0, -1) != 0)
-	    ;
-	try {
-	    var lo = lab[lidx];
-	    var hi = lab[lidx+1];
-	    stash = hi;
-	    return lo;
-	}
-	finally {
-	    Atomics.store(iab, iidx, 0);
-	}
-    };
-
-    // Atomics.H: Return the most recent stashed value.
-
-    Object.defineProperties(Atomics, {"H": {get: function() { return stash; }}});
-
-    // Atomically store (hi,lo) at lab[lidx].  Returns nothing.
-
-    Atomics.int64Store = function (lab, lidx, value_hi, value_lo) {
-	while (Atomics.compareExchange(iab, iidx, 0, -1) != 0)
-	    ;
-	try {
-	    lab[lidx] = value_lo;
-	    lab[lidx+1] = value_hi;
-	}
-	finally {
-	    Atomics.store(iab, iidx, 0);
-	}
-    };
-
-    // Atomically load (hi,lo) from lab[lidx] and compare to (expected_hi,expected_lo);
-    // if equal, update lab[idx] with (update_hi,update_lo).  Stash hi and return lo.
-
-    Atomics.int64CompareExchange = function (lab, lidx, expected_hi, expected_lo, update_hi, update_lo) {
-	while (Atomics.compareExchange(iab, iidx, 0, -1) != 0)
-	    ;
-	try {
-	    var vlo = lab[lidx];
-	    var vhi = lab[lidx+1];
-	    if (vlo == expected_lo && vhi == expected_hi) {
-		lab[lidx] = update_lo;
-		lab[lidx+1] = update_hi;
+	Atomics.int64Load = function (lab, lidx) {
+	    while (Atomics.compareExchange(iab, iidx, 0, -1) != 0)
+		;
+	    try {
+		var lo = lab[lidx];
+		var hi = lab[lidx+1];
+		stash = hi;
+		return lo;
 	    }
-	    stash = vhi;
-	    return vlo;
-	}
-	finally {
-	    Atomics.store(iab, iidx, 0);
-	}
-    };
+	    finally {
+		Atomics.store(iab, iidx, 0);
+	    }
+	};
 
-    // Atomically load (hi,lo) from lab[lidx]; let (r,s) = (hi,lo)+(value_hi,value_lo);
-    // store (r,s) at lab[idx].  Stash hi and return lo.
+	// Atomics.H: Return the most recent stashed value.
 
-    Atomics.int64Add = function (lab, lidx, value_hi, value_lo) {
-	while (Atomics.compareExchange(iab, iidx, 0, -1) != 0)
-	    ;
-	try {
-	    var lo = lab[lidx];
-	    var hi = lab[lidx+1];
-	    var rlo = lo + value_lo;
-	    lab[lidx] = rlo|0;
-	    var carry = (lo ^ value_lo) < 0 || (rlo ^ lo) >= 0 ? 1 : 0;
-	    var rhi = (hi + value_hi + carry)
-	    lab[lidx+1] = rhi|0;
-	    stash = hi;
-	    return lo;
-	}
-	finally {
-	    Atomics.store(iab, iidx, 0);
-	}
-    };
+	Object.defineProperties(Atomics, {"H": {get: function() { return stash; }}});
 
-    // Atomically load (hi,lo) from lab[lidx]; let (r,s) = (hi,lo)-(value_hi,value_lo);
-    // store (r,s) at lab[idx].  Stash hi and return lo.
+	// Atomically store (hi,lo) at lab[lidx].  Returns nothing.
 
-    Atomics.int64Sub = function (lab, lidx, value_hi, value_lo) {
-	while (Atomics.compareExchange(iab, iidx, 0, -1) != 0)
-	    ;
-	try {
-	    var lo = lab[lidx];
-	    var hi = lab[lidx+1];
-	    var rlo = lo - value_lo;
-	    lab[lidx] = rlo|0;
-	    var borrow = (lo ^ value_lo) >= 0 || (rlo ^ lo) >= 0 ? 1 : 0;
-	    var rhi = hi - value_hi - borrow;
-	    lab[lidx+1] = rhi|0;
-	    stash = hi;
-	    return lo;
-	}
-	finally {
-	    Atomics.store(iab, iidx, 0);
-	}
-    };
+	Atomics.int64Store = function (lab, lidx, value_hi, value_lo) {
+	    while (Atomics.compareExchange(iab, iidx, 0, -1) != 0)
+		;
+	    try {
+		lab[lidx] = value_lo;
+		lab[lidx+1] = value_hi;
+	    }
+	    finally {
+		Atomics.store(iab, iidx, 0);
+	    }
+	};
 
-    // Atomically load (hi,lo) from lab[lidx]; let (r,s) = (hi,lo) & (value_hi,value_lo);
-    // store (r,s) at lab[idx].  Stash hi and return lo.
+	// Atomically load (hi,lo) from lab[lidx] and compare to (expected_hi,expected_lo);
+	// if equal, update lab[idx] with (update_hi,update_lo).  Stash hi and return lo.
 
-    Atomics.int64And = function (lab, lidx, value_hi, value_lo) {
-	while (Atomics.compareExchange(iab, iidx, 0, -1) != 0)
-	    ;
-	try {
-	    var lo = lab[lidx];
-	    var hi = lab[lidx+1];
-	    lab[lidx] = lo & value_lo;
-	    lab[lidx+1] = hi & value_hi;
-	    stash = hi;
-	    return lo;
-	}
-	finally {
-	    Atomics.store(iab, iidx, 0);
-	}
-    };
+	Atomics.int64CompareExchange = function (lab, lidx, expected_hi, expected_lo, update_hi, update_lo) {
+	    while (Atomics.compareExchange(iab, iidx, 0, -1) != 0)
+		;
+	    try {
+		var vlo = lab[lidx];
+		var vhi = lab[lidx+1];
+		if (vlo == expected_lo && vhi == expected_hi) {
+		    lab[lidx] = update_lo;
+		    lab[lidx+1] = update_hi;
+		}
+		stash = vhi;
+		return vlo;
+	    }
+	    finally {
+		Atomics.store(iab, iidx, 0);
+	    }
+	};
 
-    // Atomically load (hi,lo) from lab[lidx]; let (r,s) = (hi,lo) | (value_hi,value_lo);
-    // store (r,s) at lab[idx].  Stash hi and return lo.
+	// Atomically load (hi,lo) from lab[lidx]; let (r,s) = (hi,lo)+(value_hi,value_lo);
+	// store (r,s) at lab[idx].  Stash hi and return lo.
 
-    Atomics.int64Or = function (lab, lidx, value_hi, value_lo) {
-	while (Atomics.compareExchange(iab, iidx, 0, -1) != 0)
-	    ;
-	try {
-	    var lo = lab[lidx];
-	    var hi = lab[lidx+1];
-	    lab[lidx] = lo | value_lo;
-	    lab[lidx+1] = hi | value_hi;
-	    stash = hi;
-	    return lo;
-	}
-	finally {
-	    Atomics.store(iab, iidx, 0);
-	}
-    };
+	Atomics.int64Add = function (lab, lidx, value_hi, value_lo) {
+	    while (Atomics.compareExchange(iab, iidx, 0, -1) != 0)
+		;
+	    try {
+		var lo = lab[lidx];
+		var hi = lab[lidx+1];
+		var rlo = lo + value_lo;
+		lab[lidx] = rlo|0;
+		var carry = (lo ^ value_lo) < 0 || (rlo ^ lo) >= 0 ? 1 : 0;
+		var rhi = (hi + value_hi + carry)
+		lab[lidx+1] = rhi|0;
+		stash = hi;
+		return lo;
+	    }
+	    finally {
+		Atomics.store(iab, iidx, 0);
+	    }
+	};
 
-    // Atomically load (hi,lo) from lab[lidx]; let (r,s) = (hi,lo) ^ (value_hi,value_lo);
-    // store (r,s) at lab[idx].  Stash hi and return lo.
+	// Atomically load (hi,lo) from lab[lidx]; let (r,s) = (hi,lo)-(value_hi,value_lo);
+	// store (r,s) at lab[idx].  Stash hi and return lo.
 
-    Atomics.int64Xor = function (lab, lidx, value_hi, value_lo) {
-	while (Atomics.compareExchange(iab, iidx, 0, -1) != 0)
-	    ;
-	try {
-	    var lo = lab[lidx];
-	    var hi = lab[lidx+1];
-	    lab[lidx] = lo ^ value_lo;
-	    lab[lidx+1] = hi ^ value_hi;
-	    stash = hi;
-	    return lo;
-	}
-	finally {
-	    Atomics.store(iab, iidx, 0);
-	}
-    };
+	Atomics.int64Sub = function (lab, lidx, value_hi, value_lo) {
+	    while (Atomics.compareExchange(iab, iidx, 0, -1) != 0)
+		;
+	    try {
+		var lo = lab[lidx];
+		var hi = lab[lidx+1];
+		var rlo = lo - value_lo;
+		lab[lidx] = rlo|0;
+		var borrow = (lo ^ value_lo) >= 0 || (rlo ^ lo) >= 0 ? 1 : 0;
+		var rhi = hi - value_hi - borrow;
+		lab[lidx+1] = rhi|0;
+		stash = hi;
+		return lo;
+	    }
+	    finally {
+		Atomics.store(iab, iidx, 0);
+	    }
+	};
+
+	// Atomically load (hi,lo) from lab[lidx]; let (r,s) = (hi,lo) & (value_hi,value_lo);
+	// store (r,s) at lab[idx].  Stash hi and return lo.
+
+	Atomics.int64And = function (lab, lidx, value_hi, value_lo) {
+	    while (Atomics.compareExchange(iab, iidx, 0, -1) != 0)
+		;
+	    try {
+		var lo = lab[lidx];
+		var hi = lab[lidx+1];
+		lab[lidx] = lo & value_lo;
+		lab[lidx+1] = hi & value_hi;
+		stash = hi;
+		return lo;
+	    }
+	    finally {
+		Atomics.store(iab, iidx, 0);
+	    }
+	};
+
+	// Atomically load (hi,lo) from lab[lidx]; let (r,s) = (hi,lo) | (value_hi,value_lo);
+	// store (r,s) at lab[idx].  Stash hi and return lo.
+
+	Atomics.int64Or = function (lab, lidx, value_hi, value_lo) {
+	    while (Atomics.compareExchange(iab, iidx, 0, -1) != 0)
+		;
+	    try {
+		var lo = lab[lidx];
+		var hi = lab[lidx+1];
+		lab[lidx] = lo | value_lo;
+		lab[lidx+1] = hi | value_hi;
+		stash = hi;
+		return lo;
+	    }
+	    finally {
+		Atomics.store(iab, iidx, 0);
+	    }
+	};
+
+	// Atomically load (hi,lo) from lab[lidx]; let (r,s) = (hi,lo) ^ (value_hi,value_lo);
+	// store (r,s) at lab[idx].  Stash hi and return lo.
+
+	Atomics.int64Xor = function (lab, lidx, value_hi, value_lo) {
+	    while (Atomics.compareExchange(iab, iidx, 0, -1) != 0)
+		;
+	    try {
+		var lo = lab[lidx];
+		var hi = lab[lidx+1];
+		lab[lidx] = lo ^ value_lo;
+		lab[lidx+1] = hi ^ value_hi;
+		stash = hi;
+		return lo;
+	    }
+	    finally {
+		Atomics.store(iab, iidx, 0);
+	    }
+	};
+    })();
 }
+
