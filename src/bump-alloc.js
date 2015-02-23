@@ -282,6 +282,7 @@ BumpAlloc.prototype.allocFloat64Array =
     };
 
 // Mark is a synchronization point.  The returned value is never 0.
+// The returned value is always divisible by 8.
 
 BumpAlloc.prototype.mark =
     function () {
@@ -289,7 +290,6 @@ BumpAlloc.prototype.mark =
     };
 
 // Release is a synchronization point.
-// FIXME: Issue #6: should not allow the alloc pointer to be set above the current pointer.
 
 BumpAlloc.prototype.release =
     function (p) {
