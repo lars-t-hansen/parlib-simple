@@ -362,6 +362,23 @@ SharedAlloc.prototype._allocBlocks = function (numblocks) {
 // that then becomes freed.  Now we should merge to a block of size 10
 // but that does not happen here.
 
+// Data structure for that?  That is thread-safe?  It would definitely
+// obviate the searching we're doing now.
+
+// If pages were aligned there could be a simple page map...  Each
+// entry in the map points to the first entry in the range.  If the
+// block has prev/next pointers then it can also be on a quick list.
+// The quick list need not be address ordered.  Now to merge, look in
+// the page range and find if adjacent ranges are free and if so then
+// just merge.
+
+// That's one word per page ie 0.1% overhead, the array can be
+// allocated out of the heap.  (Also we pay a little for alignment,
+// but some of that can be used for the page map.)
+
+// Allocation remains the way it is, except it has to null out the
+// page range in the block map.
+
 SharedAlloc.prototype._freeBlocksLocked = function (addr, numblocks) {
     const ia = this._int32Array;
     const meta = this._meta;
@@ -619,6 +636,11 @@ SharedAlloc.prototype._freeAt = function (p) {
 // blocks are allocated on block-aligned addresses.  That would be
 // nice in general, at the moment any 8-byte aligned 4KB region is a
 // valid "block", which is not great.
+//
+// It seems probable that the local allocator should contain a small
+// cache of free blocks, or indeed perhaps many free blocks, but that
+// that should be stored in a shared location so that it can be stolen
+// by the central allocator.
 
 SharedAlloc.prototype._coalesce = function () {
     // TODO: Implement this.  Not required for correctness per se,
