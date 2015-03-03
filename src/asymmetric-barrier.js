@@ -127,6 +127,7 @@ MasterBarrier.prototype.release =
 	Atomics.store(iab, counterLoc, numWorkers);
 	Atomics.add(iab, seqLoc, 1);
 	Atomics.futexWake(iab, seqLoc, numWorkers);
+	Atomics.add(iab, seqLoc, 1);
 	return true;
     };
 
@@ -161,6 +162,9 @@ WorkerBarrier.prototype.enter =
 	if (r == 1)
 	    postMessage(["MasterBarrier.dispatch", ID]);
 	Atomics.futexWait(iab, seqLoc, seq, Number.POSITIVE_INFINITY);
+	const v = (seq + 2)|0;
+	while (Atomics.load(iab, seqLoc) != v)
+	    ;
     };
 
 // Bug scenario 1:
