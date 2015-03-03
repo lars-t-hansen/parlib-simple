@@ -106,19 +106,18 @@ MasterBarrier.prototype.isQuiescent =
 	return Atomics.load(iab, counterLoc) == 0;
     };
 
-// If the workers are not all waiting in the barrier then return false.
-// Otherwise release them and return true.
+// The workers must all be waiting in the barrier.  Release them.
 //
-// Note that if the result is false the workers may all in fact be
-// waiting because the last worker could have entered after the check
-// was performed but before isQuiescent() returned.
-
+// Throws an error if the workers are not all waiting.  To guard
+// against that, call isQuiescent() first, though note caveats on
+// that method.
+//
 // The barrier is immediately reusable after the workers are released.
 
 MasterBarrier.prototype.release =
     function () {
 	if (!this.isQuiescent())
-	    return false;
+	    throw new Error("MasterBarrier.release called when not all workers are waiting.");
 
 	const iab = this.iab;
 	const counterLoc = this.ibase;
@@ -156,9 +155,22 @@ WorkerBarrier.prototype.enter =
 	const ID = this.ID;
 
 	const seq = Atomics.load(iab, seqLoc);
-	if (Atomics.sub(iab, counterLoc, 1) == 1)
+	const r = Atomics.sub(iab, counterLoc, 1);
+	if (r < 1)
+	    throw new Error("Internal error: Inconsistent WorkerBarrier state");
+	if (r == 1)
 	    postMessage(["MasterBarrier.dispatch", ID]);
 	Atomics.futexWait(iab, seqLoc, seq, Number.POSITIVE_INFINITY);
     };
 
-
+// Bug scenario 1:
+//
+// The Atomics.futexWait in enter() happens between Atomics.add and Atomics.futexWake in release().
+// Then the wait falls straight through, and in fact the master will have been suspended because
+// the worker held the lock for a while.  Now the worker races ahead and does one more slice before
+// it goes into the barrier.  The barrier state could now become inconsistent (value already zero).
+// Furthermore when the futexWake gets to run, it wakes the n-1 waiting threads from the first
+// iteration and the one thread from this iteration that is now waiting (on a new sequence number).
+//
+// Should be possible to demonstrate this if we have a lot of workers working who do very little
+// work, and a master who also does very little work apart from releasing the workers.
