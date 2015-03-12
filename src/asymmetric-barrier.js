@@ -116,8 +116,10 @@ MasterBarrier.prototype.isQuiescent =
 
 MasterBarrier.prototype.release =
     function () {
-	if (!this.isQuiescent())
+	if (!this.isQuiescent()) {
+	    console.log("Failing quiescence assertion");
 	    throw new Error("MasterBarrier.release called when not all workers are waiting.");
+	}
 
 	const iab = this.iab;
 	const counterLoc = this.ibase;
@@ -125,8 +127,12 @@ MasterBarrier.prototype.release =
 	const numWorkers = this.numWorkers;
 
 	Atomics.store(iab, counterLoc, numWorkers);
+	// The first add should prevent a futexWait that races with the futexWake from
+	// losing its wakeup (the wait will return Atomics.NOTEQUAL).
 	Atomics.add(iab, seqLoc, 1);
 	Atomics.futexWake(iab, seqLoc, numWorkers);
+	// The second add will prevent a wait that did not wait from racing ahead and
+	// reentering the barrier until the futexWake is complete.
 	Atomics.add(iab, seqLoc, 1);
 	return true;
     };
@@ -157,8 +163,10 @@ WorkerBarrier.prototype.enter =
 
 	const seq = Atomics.load(iab, seqLoc);
 	const r = Atomics.sub(iab, counterLoc, 1);
-	if (r < 1)
+	if (r < 1) {
 	    throw new Error("Internal error: Inconsistent WorkerBarrier state");
+	    console.log("Failing worker state test");
+	}
 	if (r == 1)
 	    postMessage(["MasterBarrier.dispatch", ID]);
 	Atomics.futexWait(iab, seqLoc, seq, Number.POSITIVE_INFINITY);
