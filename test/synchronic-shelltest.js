@@ -24,8 +24,8 @@ assertEq(s.load(), 11);
 assertEq(s.loadWhenEqual(11), 11);
 var then = Date.now();
 assertEq(s.loadWhenEqual(12), 12);
-print("Waited (A) " + (Date.now() - then) + " (should be shy 1000ms)");
-sleep(1);  // Oh, I wonder
+print("Waited (A) " + (Date.now() - then) + " (should be approx 1000ms)");
+sleep(1);
 s.store(13);
 `);
 
@@ -34,7 +34,7 @@ s.store(12);
 
 var then = Date.now();
 assertEq(s.loadWhenEqual(13), 13);
-print("Waited (B) " + (Date.now() - then) + " (should be shy 1000ms)");
+print("Waited (B) " + (Date.now() - then) + " (should be approx 1000ms)");
 
 // Int8Array tests both sub-word logic and signed logic
 
@@ -45,8 +45,11 @@ load("../src/synchronic.js");
 var sab = getSharedArrayBuffer();
 var s = new SynchronicInt8(sab, 32);
 var then = Date.now();
+assertEq(s.loadWhenEqual(-8, 500), 0); // Timeout should get us before the value changes
+print("Waited (C) " + (Date.now() - then) + " (should be approx 500ms)");
+var then = Date.now();
 assertEq(s.loadWhenEqual(-8), -8);
-print("Waited (C) " + (Date.now() - then) + " (should be shy 1000ms)");
+print("Waited (D) " + (Date.now() - then) + " (should be approx 500ms)");
 `);
 
 sleep(1);
