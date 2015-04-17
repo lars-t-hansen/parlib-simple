@@ -20,16 +20,16 @@
  *
  * where "sab" is a SharedArrayBuffer, "index" is a byte index within
  * sab that is divisible by (in this case) SynchronicInt32.NUMBYTES,
- * and "initialize" should be true for the first caller that creates
+ * and "initialize" MUST be true for the first caller that creates
  * the Synchronic object on that particular area of memory.  That
- * first call must return before any constructor calls on that memory
+ * first call MUST return before any constructor calls on that memory
  * in other threads may start.
  *
  * (Similarly for Int8, Uint8, Int16, Uint16, Uint32, Float32, and
  * Float64.)
  *
  * Each constructor function has a property NUMBYTES, which denotes
- * the number of bytes in the SharedArrayBuffer that must be reserved
+ * the number of bytes in the SharedArrayBuffer that MUST be reserved
  * for a Synchronic of the given type.  This value includes any
  * padding and control words; the memory required for an array of
  * Synchronic objects is thus the length of the array times the
@@ -41,7 +41,8 @@
  *
  * - load() retrieves the current value of the object
  * - store(v) stores v in the object
- * - compareExchange(o, n) stores n in the object if its current value is o
+ * - compareExchange(o, n) stores n in the object if its current
+ *   value c is o, and in any case returns c
  * - add(v) adds v to the object and returns the old value
  * - sub(v) subtracts v from the object and returns the old value
  * - exchange(v) stores v in the object and returns the old value
@@ -74,6 +75,9 @@
  *  - if values are NaN then values are equal if they are both NaN
  *
  * TODO:
+ *  - what should loadWhenEqual and loadWhenNotEqual return on timeout?
+ *  - do we really want a different equality test for loadWhenEqual
+ *    and loadWhenNotEqual than for compareExchange?
  *  - we /might/ need the updating methods to take a hint about how
  *    many waiters to wake.  The C++ proposal has none/one/all.  But
  *    hints are not great for JS - we'd like something binding, or
@@ -168,6 +172,7 @@ const _Synchronic_int_methods =
     loadWhenEqual: function (value, timeout) {
 	var v;
 	if (timeout !== undefined) {
+	    timeout = +timeout;
 	    var now = _Synchronic_now();
 	    var limit = now + timeout;
 	    while ((v = Atomics.load(this._ta, this._taIdx)) != value && now < limit) {
@@ -185,6 +190,7 @@ const _Synchronic_int_methods =
     loadWhenNotEqual: function (value, timeout) {
 	var v;
 	if (timeout !== undefined) {
+	    timeout = +timeout;
 	    var now = _Synchronic_now();
 	    var limit = now + timeout;
 	    while ((v = Atomics.load(this._ta, this._taIdx)) == value && now < limit) {
