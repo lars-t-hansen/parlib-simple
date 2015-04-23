@@ -45,7 +45,8 @@ load("../src/synchronic.js");
 var sab = getSharedArrayBuffer();
 var s = new SynchronicInt8(sab, 32);
 var then = Date.now();
-assertEq(s.loadWhenEqual(-8, 500), 0); // Timeout should get us before the value changes
+s.expectUpdate(-8, 500); // Should timeout before value is set
+assertEq(s.load(), 0);   // Ergo value should be unchanged
 print("Waited (C) " + (Date.now() - then) + " (should be approx 500ms)");
 var then = Date.now();
 assertEq(s.loadWhenEqual(-8), -8);
