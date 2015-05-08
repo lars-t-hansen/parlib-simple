@@ -25,8 +25,11 @@
  * first call MUST return before any constructor calls on that memory
  * in other threads may start.
  *
- * (Similarly for Int8, Uint8, Int16, Uint16, Uint32, Float32, and
- * Float64.)
+ * Similarly for Int8, Uint8, Int16, Uint16, Uint32, Float32, and
+ * Float64.
+ *
+ * NOTE  Float variants are currently disabled, because the Atomics
+ *       support for float has not yet landed.
  *
  * Each constructor function has a property BYTES_PER_ELEMENT, which
  * denotes the number of bytes in the SharedArrayBuffer that MUST be
@@ -52,6 +55,9 @@
  * - and(v) bitwise-ands v into the object and returns the old value
  * - or(v) bitwise-ors v into the object and returns the old value
  * - xor(v) bitwise-xors v into the object and returns the old value
+ *
+ * NOTE   The exchange method is currently disabled, because the Atomics
+ *        support for exchange has not yet landed.
  *
  * Finally, objects have methods that wait for and signal events:
  *
@@ -165,11 +171,13 @@ const _Synchronic_int_methods =
 	return v;
     },
 
+    /*
     exchange: function (value) {
 	const v = Atomics.exchange(this._ta, this._taIdx, value);
 	this._notify();
 	return v;
     },
+    */
 
     loadWhenNotEqual: function (value_) {
 	var value = this._coerce(value_);
@@ -517,5 +525,5 @@ var SynchronicInt16 = _Synchronic_constructorForInt(SharedInt16Array);
 var SynchronicUint16 = _Synchronic_constructorForInt(SharedUint16Array);
 var SynchronicInt32 = _Synchronic_constructorForInt(SharedInt32Array);
 var SynchronicUint32 = _Synchronic_constructorForInt(SharedUint32Array);
-var SynchronicFloat32 = _Synchronic_constructorForFloat(SharedFloat32Array);
-var SynchronicFloat64 = _Synchronic_constructorForFloat(SharedFloat64Array);
+//var SynchronicFloat32 = _Synchronic_constructorForFloat(SharedFloat32Array);
+//var SynchronicFloat64 = _Synchronic_constructorForFloat(SharedFloat64Array);
