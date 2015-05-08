@@ -2,11 +2,14 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// Simple queue of arrays of Int32 values - useful building block for
-// many other mechanisms.
-//
+/*
+ * Simple queue for transmitting arrays of Int32 values - a useful
+ * building block for other mechanisms.
+ */
+
 // REQUIRE
 //   synchronic.js
+//   arena.js
 
 // Internal constants.
 const _IQ_USED = 0;
@@ -17,37 +20,29 @@ const _IQ_TAIL = 2;
  * Construct an IntQueue object in any agent.
  *
  * sab must be a SharedArrayBuffer.
- * offset must be a valid offset within that array, divisible by 8.
- * length must be the length of a segment within that array, divisible by 8.
- * length-offset must be at least IntQueue.NUMBYTES;
- *
+ * offset must be a valid offset within that array.
+ * length must be the length of a segment within that array.
+ * length-offset must have space for metadata and queue data.
+ *   An upper bound on metadata is given by IntQueue.NUMBYTES.
  * If initialize==true then initialize the shared memory for the queue.
- * Constructors may be called concurrently in all threads but the queue
- * should not be used in any thread until the constructor that performs
+ *   Initialization must only be performed in one agent.
+ *
+ * Constructors may be called concurrently in all agents but the queue
+ * must not be used in any agent until the constructor that performs
  * the initialization has returned.
  */
 function IntQueue(sab, offset, length, initialize) {
-    if (!(sab instanceof SharedArrayBuffer &&
-	  offset >= 0 && offset < sab.byteLength && offset % 8 == 0 &&
-	  length >= 0 && offset + length <= sab.byteLength && length % 8 == 0 &&
-	  length - offset >= IntQueue.NUMBYTES))
-    {
-	throw new Error("Bad queue parameters");
-    }
-
     initialize = !!initialize;
 
-    var alloc = offset;
-    this._spaceAvailable = new SynchronicInt32(sab, alloc, initialize);
-    alloc += SynchronicInt32.BYTES_PER_ELEMENT;
-    this._dataAvailable = new SynchronicInt32(sab, alloc, initialize);
-    alloc += SynchronicInt32.BYTES_PER_ELEMENT;
-    this._lock = new SynchronicInt32(sab, alloc, initialize);
-    alloc += SynchronicInt32.BYTES_PER_ELEMENT;
-    this._meta = new SharedInt32Array(sab, alloc, 3);
-    alloc += this._meta.length * SharedInt32Array.BYTES_PER_ELEMENT;
-    var qlen = ((offset + length - alloc) & ~7) / SharedInt32Array.BYTES_PER_ELEMENT;
-    this._queue = new SharedInt32Array(sab, alloc, qlen);
+    var intSize = 4;
+    var synSize = SynchronicInt32.BYTES_PER_ELEMENT;
+    var a = new Arena(sab, offset, length);
+    this._spaceAvailable = new SynchronicInt32(sab, a.alloc(synSize, synSize), initialize);
+    this._dataAvailable = new SynchronicInt32(sab, a.alloc(synSize, synSize), initialize);
+    this._lock = new SynchronicInt32(sab, a.alloc(synSize, synSize), initialize);
+    this._meta = new SharedInt32Array(sab, a.alloc(intSize*3, intSize), 3);
+    var qlen = Math.floor(a.available(intSize) / intSize);
+    this._queue = new SharedInt32Array(sab, a.alloc(intSize*qlen, intSize), qlen);
 
     if (initialize) {
 	Atomics.store(this._meta, _IQ_USED, 0);
@@ -57,9 +52,10 @@ function IntQueue(sab, offset, length, initialize) {
 }
 
 /*
- * The number of bytes in the array reserved for metadata.
+ * The number of bytes needed for metadata (upper bound, allowing for
+ * bad alignment etc).
  */
-IntQueue.NUMBYTES = (SynchronicInt32.BYTES_PER_ELEMENT*3 + SharedInt32Array.BYTES_PER_ELEMENT*3 + 7) & ~7;
+IntQueue.NUMBYTES = 64;
 
 /*
  * Enters an element into the queue, waits until space is available or
@@ -85,9 +81,8 @@ IntQueue.prototype.enqueue = function(ints, t) {
     }
     this._meta[_IQ_TAIL] = tail;
     this._meta[_IQ_USED] += required;
-    this._dataAvailable.add(1);
 
-    this._release();
+    this._releaseWithDataAvailable();
     return true;
 }
 
@@ -114,9 +109,8 @@ IntQueue.prototype.dequeue = function (t) {
     }
     this._meta[_IQ_HEAD] = head;
     this._meta[_IQ_USED] -= A.length + 1;
-    this._spaceAvailable.add(1);
 
-    this._release();
+    this._releaseWithSpaceAvailable();
     return A;
 }
 
@@ -126,11 +120,10 @@ IntQueue.prototype._acquireWithSpaceAvailable = function (required, t) {
     var limit = typeof t != "undefined" ? Date.now() + t : Number.POSITIVE_INFINITY;
     for (;;) {
 	this._acquire();
-	var probe = this._spaceAvailable.load();
 	if (this._queue.length - this._meta[_IQ_USED] >= required)
 	    break;
+	var probe = this._spaceAvailable.load();
 	this._release();
-	//print("Waiting for space");
 	var remaining = limit - Date.now();
 	if (remaining <= 0)
 	    return false;
@@ -143,17 +136,26 @@ IntQueue.prototype._acquireWithDataAvailable = function (t) {
     var limit = typeof t != "undefined" ? Date.now() + t : Number.POSITIVE_INFINITY;
     for (;;) {
 	this._acquire();
-	var probe = this._dataAvailable.load();
 	if (this._meta[_IQ_USED] > 0)
 	    break;
+	var probe = this._dataAvailable.load();
 	this._release();
 	var remaining = limit - Date.now();
 	if (remaining <= 0)
 	    return false;
-	//print("Waiting for data " + probe + " " + this._dataAvailable.load() + " " + remaining);
 	this._dataAvailable.expectUpdate(probe, remaining);
     }
     return true;
+}
+
+IntQueue.prototype._releaseWithSpaceAvailable = function() {
+    this._spaceAvailable.add(1);
+    this._release();
+}
+
+IntQueue.prototype._releaseWithDataAvailable = function() {
+    this._dataAvailable.add(1);
+    this._release();
 }
 
 IntQueue.prototype._acquire = function () {

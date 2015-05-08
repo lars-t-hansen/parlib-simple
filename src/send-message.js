@@ -11,6 +11,7 @@
 // but that's fixable.
 
 // REQUIRE:
+//   arena.js
 //   marshaler.js
 //   intqueue.js
 //   synchronic.js
@@ -51,7 +52,7 @@ function ChannelSender(sab, offset, length) {
  */
 ChannelSender.prototype.send = function(msg, t) {
     try {
-	var {values, newSAB} = this._marshaler.marshal(msg);
+	var {values, newSAB} = this._marshaler.marshal([msg]);
     }
     catch (e) {
 	// TODO: This could be improved by making the Marshaler throw useful errors.
@@ -80,7 +81,7 @@ ChannelReceiver.prototype.receive = function (t, noMessage) {
     var M = this._queue.dequeue(t);
     if (M == null)
 	return noMessage;
-    return this._marshaler.unmarshal(M);
+    return this._marshaler.unmarshal(M, 0, M.length)[0];
 }
 
 /*
