@@ -6,91 +6,85 @@
 //
 // This is by and large like postMessage except that it cannot
 // transfer ArrayBuffer values (it can only copy them), and it cannot
-// send or receive SharedArrayBuffer values at all.
+// send or receive SharedArrayBuffer values at all.  Also, the
+// marshaler currently does not deal with circular/shared structure
+// but that's fixable.
 
 // REQUIRE:
 //   marshaler.js
+//   intqueue.js
+//   synchronic.js
 
-// XXXX This really is just marshaling + intqueue
-// XXXX And intqueue is really just sab + synchronic
-
-// Create one endpoint of a channel.
-//
-// "sab" is a SharedArrayBuffer, "offset" is a byte offset within that
-// buffer, and "length" is the length of the region reserved as a
-// message buffer.  "offset" and "length" should be evenly divisible
-// by eight.
-//
-// Both endpoints must be created before either send or receive may be
-// called on the channel.  Both endpoints must be created with the
-// same values for sab, offset, and length.
-//
-// How much space do you need?  The channel transmits a stream of
-// tag+value pairs, or fieldname+tag+value triples in objects.  It
-// optimizes transmission of typed data structures (strings,
-// TypedArrays) by omitting tags when it can.  If mostly small data
-// structures are being sent then a few kilobytes should be enough to
-// allow a number of messages to sit in a queue at once.
-
+/*
+ * Create the sender endpoint of the channel.
+ *
+ * "sab" is a SharedArrayBuffer, "offset" is a byte offset within that
+ * buffer, and "length" is the length of the region reserved as a
+ * message buffer.  "offset" and "length" should be evenly divisible
+ * by eight.
+ *
+ * Both endpoints must be created before either send or receive may be
+ * called on the channel.  Both endpoints must be created with the
+ * same values for sab, offset, and length.
+ *
+ * How much space will you need?  The channel transmits a stream of
+ * tag+value pairs, or fieldname+tag+value triples in objects.  It
+ * optimizes transmission of typed data structures (strings,
+ * TypedArrays) by omitting tags when it can.  If mostly small data
+ * structures are being sent then a few kilobytes should be enough to
+ * allow a number of messages to sit in a queue at once.
+ */
 function ChannelSender(sab, offset, length) {
-    if (!(sab instanceof SharedArrayBuffer) ||
-	!(offset >= 0 && offset < sab.byteLength) || offset % 8 ||
-	!(length >= 0 && offset + length < sab.byteLength) || length % 8)
-    {
-	throw new Error("Bad channel parameters");
+    this._queue = new IntQueue(sab, offset, length, true);
+    this._marshaler = new Marshaler();
+}
+
+/*
+ * Send a message on the channel, waiting for up to t milliseconds for
+ * available space (undefined == indefinite wait), and then return
+ * without waiting for the recipient to pick up the message.
+ *
+ * Returns true if the message was sent, false if space did not become
+ * available.
+ *
+ * Throws ChannelEncodingError on encoding error.
+ */
+ChannelSender.prototype.send = function(msg, t) {
+    try {
+	var {values, newSAB} = this._marshaler.marshal(msg);
     }
-    this._sab = sab;
-    this._offset = offset;
-    this._length = length;
-
-    // The sending side initializes the memory.
-    // _alloc is the allocation pointer.
-    // _limit is the limit of the buffer.
-    // Metadata are stored at the high end.
-    //
-    // @len-1: head (word address)
-    // @len-2: tail (word address)
-    // @len-3: message count
-    // @len-4: empty
-    //
-    // A message 
-
-    this._iab = new Int32Array(sab, offset, length/4);
-    this._alloc = 0;
-    this._limit = length/4;
+    catch (e) {
+	// TODO: This could be improved by making the Marshaler throw useful errors.
+	throw new ChannelEncodingError("Marshaler failed:\n" + e);
+    }
+    if (newSAB.length)
+	throw new ChannelEncodingError("SharedArrayBuffer not supported");
+    return this._queue.enqueue(values, t);
 }
 
-// Send a message on the channel and then return without waiting for
-// the recipient.
-//
-// If the message cannot be sent because the queue is full then this
-// invokes the onfull method and returns whatever that method returns.
-//
-// XXX What about invalid values?
-
-ChannelSender.prototype.send = function(msg) {
-}
-
-ChannelSender.prototype.onfull = function () {
-    throw new ChannelFullError;
-}
-
+/*
+ * Create the receiver endpoint.  See comments on the sender endpoint.
+ */
 function ChannelReceiver(sab, offset, length) {
+    this._queue = new IntQueue(sab, offset, length, false);
+    this._marshaler = new Marshaler();
 }
 
-// Receive a message from the channel, waiting for up to t
-// milliseconds (or undefinitely if t is undefined) until there is a
-// message if necessary.  If no message is received then this invokes
-// the ontimeout method and returns the value of that method.
-
-ChannelReceiver.prototype.receive = function (t) {
+/*
+ * Receive a message from the channel, waiting for up to t
+ * milliseconds (undefined == indefinite wait) until there is a
+ * message if necessary.  Returns the message, or the noMessage value
+ * if none was received.
+ */
+ChannelReceiver.prototype.receive = function (t, noMessage) {
+    var M = this._queue.dequeue(t);
+    if (M == null)
+	return noMessage;
+    return this._marshaler.unmarshal(M);
 }
 
-// Overridable handler that is called when receive times out.
-
-ChannelReceiver.prototype.ontimeout = function () {
-    return false;
-}
-
-function ChannelFullError() {
+/*
+ * Error object.  TODO: this needs to inherit from Error somehow.
+ */
+function ChannelEncodingError() {
 }

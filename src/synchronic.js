@@ -197,7 +197,7 @@ const _Synchronic_int_methods =
 	var timeout = +timeout_;
 	var now = _Synchronic_now();
 	var limit = now + timeout;
-	for ( var v=Atomics.load(this._ta, this._taIdx) ; v !== value && now < limit ; v=Atomics.load(this._ta, this._taIdx)) {
+	for ( var v=Atomics.load(this._ta, this._taIdx) ; v === value && now < limit ; v=Atomics.load(this._ta, this._taIdx)) {
 	    this._waitForUpdate(v, limit - now);
 	    now = _Synchronic_now();
 	}
