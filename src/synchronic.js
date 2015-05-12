@@ -25,10 +25,10 @@
  *
  * where "sab" is a SharedArrayBuffer, "index" is a byte index within
  * sab that is divisible by (in this case) SynchronicInt32.BYTES_PER_ELEMENT
- * and "initialize" MUST be true for the first caller that creates
+ * and "initialize" MUST be true for exactly one agent that creates
  * the Synchronic object on that particular area of memory.  That
- * first call MUST return before any constructor calls on that memory
- * in other threads may start.
+ * initializing call MUST return before any methods may be called on
+ * the synchronic in any agent.
  *
  * Similarly for Int8, Uint8, Int16, Uint16, Uint32, Float32, and
  * Float64.
@@ -105,7 +105,11 @@
  *    hints are not great for JS - we'd like something binding, or
  *    nothing at all.
  *
- *  - we /probably/ want to implement isLockFree().
+ *  - we need a strategy for smaller int types.  This either means
+ *    using Int32 ops for the smaller types and then manually
+ *    sign-extending or masking after the operation, or it means
+ *    splitting the datum apart from the word that we wait on, and
+ *    probably adding a serial number.  The latter might be cleaner.
  */
 
 const _Synchronic_now = (function () {
