@@ -37,7 +37,8 @@ assertEq(s.loadWhenEqual(13), 13);
 print("Waited (B) " + (Date.now() - then) + " (should be approx 1000ms)");
 
 // Int8Array tests both sub-word logic and signed logic
-
+// Commented out because the Int8 API has been temporarily removed.
+/*
 var s = new SynchronicInt8(sab, 32, true);
 
 evalInWorker(`
@@ -55,3 +56,4 @@ print("Waited (D) " + (Date.now() - then) + " (should be approx 500ms)");
 
 sleep(1);
 s.store(-8);
+*/
