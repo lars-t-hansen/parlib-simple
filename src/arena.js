@@ -7,6 +7,11 @@
  * allocation pointer/limit management in a SharedArrayBuffer.
  */
 
+
+// TODO: Rename as SABArena?  And why limit to SAB?  An ArrayBuffer would
+// work just as well.  It could just be ArrayBufferArena.
+// If changing that, be sure to push type test for SAB into clients.
+
 /*
  * Construct the arena.  sab must be a SharedArrayBuffer, offset must be
  * a valid index, offset + length - 1 must be a valid index, and length must
@@ -17,7 +22,7 @@ function Arena(sab, offset, length) {
 	  offset >= 0 && offset < sab.byteLength &&
 	  length >= 0 && offset + length <= sab.byteLength))
     {
-	throw new Error("Bad arena parameters");
+	throw new Error("Bad arena parameters: " + sab + " " + offset + " " + length);
     }
     this._sab = sab;
     this._offset = offset;
