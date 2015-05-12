@@ -16,6 +16,8 @@
 //   intqueue.js
 //   synchronic.js
 
+"use strict";
+
 /*
  * Create the sender endpoint of the channel.
  *
@@ -35,8 +37,8 @@
  * structures are being sent then a few kilobytes should be enough to
  * allow a number of messages to sit in a queue at once.
  */
-function ChannelSender(sab, offset, length) {
-    this._queue = new IntQueue(sab, offset, length, true);
+function ChannelSender(sab, offset, length, initialize) {
+    this._queue = new IntQueue(sab, offset, length, initialize);
     this._marshaler = new Marshaler();
 }
 
@@ -66,8 +68,8 @@ ChannelSender.prototype.send = function(msg, t) {
 /*
  * Create the receiver endpoint.  See comments on the sender endpoint.
  */
-function ChannelReceiver(sab, offset, length) {
-    this._queue = new IntQueue(sab, offset, length, false);
+function ChannelReceiver(sab, offset, length, initialize) {
+    this._queue = new IntQueue(sab, offset, length, initialize);
     this._marshaler = new Marshaler();
 }
 
@@ -85,7 +87,9 @@ ChannelReceiver.prototype.receive = function (t, noMessage) {
 }
 
 /*
- * Error object.  TODO: this needs to inherit from Error somehow.
+ * Error object.
  */
-function ChannelEncodingError() {
+function ChannelEncodingError(message) {
+    this.message = message;
 }
+ChannelEncodingError.prototype = new Error;
