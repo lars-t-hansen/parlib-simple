@@ -8,9 +8,6 @@
  * For motivation, see:
  * http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4195.pdf
  * https://code.google.com/p/synchronic/
- *
- * This is still work in progress, but the SynchronicInt32 code has
- * been tested extensively and is probably solid.
  */
 
 "use strict";
@@ -30,15 +27,9 @@
  * initializing call MUST return before any methods may be called on
  * the synchronic in any agent.
  *
- * Similarly for Int8, Uint8, Int16, Uint16, Uint32, Float32, and
- * Float64.
+ * Similarly for Int8, Uint8, Int16, Uint16, and Uint32.
  *
- * NOTE  Int variants other than 32-bits are currently disabled,
- *       because the use of differently-sized atomics on the
- *       same locations is not well-defined.  See FIXME later.
- *
- * NOTE  Float variants are currently disabled, because the Atomics
- *       support for float has not yet landed.
+ * NOTE  Float variants are not yet supported.
  *
  * Each constructor function has a property BYTES_PER_ELEMENT, which
  * denotes the number of bytes in the SharedArrayBuffer that MUST be
@@ -78,8 +69,8 @@
  *   observed to be other than x.  It then returns the value in the
  *   cell (which may once again be x).
  *
- * - expectUpdate(x, t) waits until the value in the cell is no longer
- *   x or t milliseconds have passed.  It returns nothing.
+ * - expectUpdate(x, t) waits until the value in the cell may no
+ *   longer be x or t milliseconds have passed.  It returns nothing.
  *
  * - notify() asks all waiters to re-check their waiting conditions.
  *
@@ -104,19 +95,7 @@
  *    many waiters to wake.  The C++ proposal has none/one/all.  But
  *    hints are not great for JS - we'd like something binding, or
  *    nothing at all.
- *
- *  - we need a strategy for smaller int types.  This either means
- *    using Int32 ops for the smaller types and then manually
- *    sign-extending or masking after the operation, or it means
- *    splitting the datum apart from the word that we wait on, and
- *    probably adding a serial number.  The latter might be cleaner.
  */
-
-const _Synchronic_now = (function () {
-    if (typeof 'performance' != 'undefined' && typeof performance.now == 'function')
-	return performance.now.bind(performance);
-    return Date.now.bind(Date);
-})();
 
 /* A Synchronic for integer types occupies 8 bytes.  The first four
  * bytes hold the value, the last four bytes hold a counter for the
@@ -134,15 +113,9 @@ const _Synchronic_now = (function () {
  */
 const _Synchronic_int_methods =
 {
-    // FIXME: The following code is well-defined only for Int32 and
-    // Uint32, since atomics of different access size to the same are
-    // are not actually atomic on all platforms.  Specifically,
-    // futexWait waits on the data location as an int32 while the
-    // other operations access it as whatever type synchronic this is.
-
     isLockFree: function () {
-	// API not yet available
-	//return Atomics.isLockFree(this._ta.BYTES_PER_ELEMENT);
+	// ints are always lock-free, and this API is probably
+	// superflous now.
 	return true;
     },
 
@@ -203,25 +176,40 @@ const _Synchronic_int_methods =
 
     loadWhenNotEqual: function (value_) {
 	var value = this._coerce(value_);
-	this._waitForUpdate(value, Number.POSITIVE_INFINITY);
-	return Atomics.load(this._ta, this._taIdx);
+	for (;;) {
+	    var tag = Atomics.load(this._ia, this._iaIdx+2);
+	    var v = Atomics.load(this._ta, this._taIdx) ;
+	    if (v !== value)
+		break;
+	    this._waitForUpdate(tag, Number.POSITIVE_INFINITY);
+	}
+	return v;
     },
 
     loadWhenEqual: function (value_) {
 	var value = this._coerce(value_);
-	for ( var v=Atomics.load(this._ta, this._taIdx) ; v !== value ; v=Atomics.load(this._ta, this._taIdx))
-	    this._waitForUpdate(v, Number.POSITIVE_INFINITY);
+	for (;;) {
+	    var tag = Atomics.load(this._ia, this._iaIdx+2);
+	    var v = Atomics.load(this._ta, this._taIdx) ;
+	    if (v === value)
+		break;
+	    this._waitForUpdate(tag, Number.POSITIVE_INFINITY);
+	}
 	return v;
     },
 
     expectUpdate: function (value_, timeout_) {
 	var value = this._coerce(value_);
 	var timeout = +timeout_;
-	var now = _Synchronic_now();
+	var now = this._now();
 	var limit = now + timeout;
-	for ( var v=Atomics.load(this._ta, this._taIdx) ; v === value && now < limit ; v=Atomics.load(this._ta, this._taIdx)) {
-	    this._waitForUpdate(v, limit - now);
-	    now = _Synchronic_now();
+	for (;;) {
+	    var tag = Atomics.load(this._ia, this._iaIdx+2);
+	    var v = Atomics.load(this._ta, this._taIdx) ;
+	    if (v !== value || now >= limit)
+		break;
+	    this._waitForUpdate(tag, limit - now);
+	    now = this._now();
 	}
     },
 
@@ -229,17 +217,28 @@ const _Synchronic_int_methods =
 	this._notify();
     },
 
-    _waitForUpdate: function (currentValue, timeout) {
+    _waitForUpdate: function (tag, timeout) {
 	Atomics.add(this._ia, this._iaIdx+1, 1);
-	Atomics.futexWait(this._ia, this._iaIdx, currentValue & this._unsignedMask, timeout);
+	Atomics.futexWait(this._ia, this._iaIdx+2, tag, timeout);
 	Atomics.sub(this._ia, this._iaIdx+1, 1);
     },
 
     _notify: function () {
+	Atomics.add(this._ia, this._iaIdx+2, 1);
 	if (Atomics.load(this._ia, this._iaIdx+1) > 0)
-	    Atomics.futexWake(this._ia, this._iaIdx, Number.POSITIVE_INFINITY);
-    }
+	    Atomics.futexWake(this._ia, this._iaIdx+2, Number.POSITIVE_INFINITY);
+    },
+
+    _now: (typeof 'performance' != 'undefined' && typeof performance.now == 'function'
+	   ? performance.now.bind(performance)
+	   : Date.now.bind(Date))
 };
+
+// A synchronic<integer> is 16 bytes / 4 ints, as follows:
+//  - the value, four bytes but not all may be used, accessed atomically
+//  - the number of waiters
+//  - the wait word, a generation number used for futexWait / futexWake
+//  - unused
 
 const _Synchronic_constructorForInt = function (constructor) {
     const BIG = 1;
@@ -273,38 +272,33 @@ const _Synchronic_constructorForInt = function (constructor) {
     // TODO: some of the properties on "this" are shared among all synchronics of
     // the same underlying type, and could be lifted to a shared prototype object:
     //
-    // - _unsignedMask
     // - _coerce
 
-    const syncSize = 8;
+    const syncSize = 16;
 
     const makeSynchronicIntType =
-	function (sab, index, initialize) {
-	    index = index|0;
+	function (sab, offset, initialize) {
+	    offset = offset|0;
 	    initialize = !!initialize;
 	    if (!(sab instanceof SharedArrayBuffer))
 		throw new Error("Synchronic not onto SharedArrayBuffer");
-	    if (index < 0 || (index & 3))
+	    if (offset < 0 || (offset & (syncSize-1)))
 		throw new Error("Synchronic at negative or unaligned index");
-	    if (index + syncSize > sab.byteLength)
+	    if (offset + syncSize > sab.byteLength)
 		throw new Error("Synchronic extends beyond end of buffer");
 	    if (!sab._synchronic_int32_view)
 		sab._synchronic_int32_view = new SharedInt32Array(sab);
 	    if (!sab[taName])
 		sab[taName] = new constructor(sab);
 	    this._ta = sab[taName];
-	    const bpe = constructor.BYTES_PER_ELEMENT;
-	    if (endian == BIG)
-		this._taIdx = index / bpe;
-	    else
-		this._taIdx = index / bpe + (4 - bpe);
+	    this._taIdx = offset / constructor.BYTES_PER_ELEMENT;
 	    this._ia = sab._synchronic_int32_view;
-	    this._iaIdx = index / 4;
-	    this._unsignedMask = bpe == 4 ? -1 : (1 << bpe*8)-1;
+	    this._iaIdx = offset / 4;
 	    this._coerce = tag == "uint32" ? _coerce_uint : _coerce_int;
 	    if (initialize) {
 		Atomics.store(this._ta, this._taIdx, 0);
 		Atomics.store(this._ia, this._iaIdx+1, 0);
+		Atomics.store(this._ia, this._iaIdx+2, 0);
 	    }
 	};
 
@@ -314,245 +308,9 @@ const _Synchronic_constructorForInt = function (constructor) {
     return makeSynchronicIntType;
 }
 
-// FLOAT CODE IS NOT TESTED YET
-
-/* For the float methods we use a seqLock to coordinate access to the
- * datum because the datum comprises both the value in the cell and
- * the integer that we'll wait on, a sequence number:
- * Atomics.futexWait can't wait on a floating point value.
- *
- * As for the int case we probably want a counter to track the number
- * of waiters, to avoid calling futexWake on every update.
- *
- * The float methods can be adapted to values of larger size (though
- * for those values "add" and "sub" won't make sense).
- */
-
-/* Here we need to use three words for float and four words for double,
-   since we need both the sequence number and a count of waiters.
-   */
-
-const _Synchronic_float_methods =
-{
-    load: function () {
-	var [v,_] = this._read();
-	return v;
-    },
-
-    store: function (value_) {
-	var value = +value_;
-	var seq0 = this._acquireWrite();
-	Atomics.store(this._ta, this._taIdx, value);
-	this._releaseWrite(seq0);
-    },
-
-    // If the value in the cell and oldval are both zero but with
-    // different signs then this method will still replace the value
-    // in the cell (and will return the old value in the cell).
-    //
-    // If the value in the cell and oldval are both canonical NaN then
-    // this will replace the value in the cell.
-    //
-    // If the value in the cell is a non-canonical NaN then this will
-    // not replace the value even if oldval is a NaN.  Such a value
-    // can only be set by smuggling it in through aliasing, and should
-    // not be an issue in practice.
-
-    compareExchange: function (oldval_, newval_) {
-	var oldval = +oldval_;
-	var newval = +newval_;
-	var seq0 = this._acquireWrite();
-	var v = Atomics.compareExchange(this._ta, this._taIdx, oldval, newval);
-	if (oldval === 0.0 && v === 0.0 && 1/(oldval*v) < 0)
-	    v = Atomics.compareExchange(this._ta, this._taIdx, v, newval);
-	/*
-	else if (isNaN(oldval) && isNaN(v)) {
-	    // Consider the case where the value in the cell is
-	    // noncanonical NaN, in that case we need to do a CAS with
-	    // the noncanonical NaN for oldval.  That is not
-	    // expressible in JS, Waldo had the same issue with some
-	    // of the self-hosted TypedArray copy primitives.
-	}
-	*/
-	this._releaseWrite(seq0);
-	return v;
-    },
-
-    add: function (value_) {
-	var value = +value_;
-	var seq0 = this._acquireWrite();
-	const ta = this._ta;
-	const taIdx = this._taIdx;
-	var v = Atomics.load(ta, taIdx);
-	Atomics.store(ta, taIdx, v+value);
-	this._releaseWrite(seq0);
-	return v;
-    },
-
-    sub: function (value_) {
-	var value = +value_;
-	var seq0 = this._acquireWrite();
-	const ta = this._ta;
-	const taIdx = this._taIdx;
-	var v = Atomics.load(ta, taIdx);
-	Atomics.store(ta, taIdx, value);
-	this._releaseWrite(seq0);
-	return v;
-    },
-
-    exchange: function (value_) {
-	var value = +value_;
-	var seq0 = this._acquireWrite();
-	var v = Atomics.exchange(this._ta, this._taIdx, value);
-	this._releaseWrite(seq0);
-	return v;
-    },
-
-    // a equals b iff a === b || isNaN(a) && isNaN(b)
-    loadWhenNotEqual: function (value_) {
-	const value = +value_;
-	for (;;) {
-	    var [v, seq0] = this._read();
-	    if (!(v === value || isNaN(value) && isNaN(v)))
-		break;
-	    this._waitForUpdate(seq0, Number.POSITIVE_INFINITY);
-	}
-	return v;
-    },
-
-    // a equals b iff a === b || isNaN(a) && isNaN(b)
-    loadWhenEqual: function (value_) {
-	const value = +value_;
-	for (;;) {
-	    var [v, seq0] = this._read();
-	    if (v === value || isNaN(value) && isNaN(v))
-		break;
-	    this._waitForUpdate(seq0, Number.POSITIVE_INFINITY);
-	}
-	return v;
-    },
-
-    // a equals b iff a === b || isNaN(a) && isNaN(b)
-    expectUpdate: function (value_, timeout_) {
-	var value = +value_;
-	var timeout = +timeout_;
-	var now = _Synchronic_now();
-	var limit = now + timeout;
-	for (;;) {
-	    var [v, seq0] = this._read();
-	    if (!(v === value || isNaN(value) && isNaN(v)) || now >= limit)
-		break;
-	    this._waitForUpdate(seq0, limit - now);
-	    now = _Synchronic_now();
-	}
-    },
-
-    notify: function () {
-	this._notify();
-    },
-
-    _read: function () {
-	const ia = this._ia;
-	const iaIdx = this._iaIdx;
-	const ta = this._ta;
-	const taIdx = this._taIdx;
-	var seq0, seq1, v;
-	do {
-	    seq0 = Atomics.load(ia, iaIdx);
-	    v = Atomics.load(ta, taIdx);
-	    seq1 = Atomics.load(ia, iaIdx);
-	} while (seq0 != seq1 || (seq0 & 1));
-	return [v, seq0];
-    },
-
-    _acquireWrite: function () {
-	const ia = this._ia;
-	const iaIdx = this._iaIdx;
-	var seq0, nseq;
-	seq0 = Atomics.load(ia, iaIdx);
-	while ((seq0 & 1) || (nseq = Atomics.compareExchange(ia, iaIdx, seq0, seq0+1)) != seq0)
-	    seq0 = nseq;
-	return seq0;
-    },
-
-    _releaseWrite: function (currentSeq) {
-	Atomics.store(this._ia, this._iaIdx, currentSeq+2);
-	this._notify();
-    },
-
-    // If the cell value has been updated since it was read, then either
-    // the sequence number will have been updated too, and we will not
-    // wait, or we will be awoken explicitly after that update.
-
-    _waitForUpdate: function (currentSeq, timeout) {
-	const ia = this._ia;
-	const iaIdx = this._iaIdx;
-
-	Atomics.add(ia, iaIdx+1, 1);
-	Atomics.futexWait(ia, iaIdx, currentSeq, timeout);
-	Atomics.sub(ia, iaIdx+1, 1);
-    },
-
-    _notify: function () {
-	const ia = this._ia;
-	const iaIdx = this._iaIdx;
-
-	if (Atomics.load(ia, iaIdx+1))
-	    Atomics.futexWake(ia, iaIdx, Number.POSITIVE_INFINITY);
-    }
-};
-
-const _Synchronic_constructorForFloat = function (constructor) {
-    var offset = 0;
-    var tag = "";
-
-    switch (constructor) {
-    case SharedFloat32Array: tag = "float32"; floating = true; offset=4; break;  // Extra words for seq+count+padding
-    case SharedFloat64Array: tag = "float64"; floating = true; offset=8; break;  // Extra words for seq+count
-    default:                 throw new Error("Invalid constructor for Synchronic: " + constructor);
-    }
-
-    const taName = "_synchronic_" + tag + "_view";
-
-    const makeSynchronicFloatType =
-	function (sab, index, initialize) {
-	    index = index|0;
-	    initialize = !!initialize;
-	    if (!(sab instanceof SharedArrayBuffer))
-		throw new Error("Synchronic not onto SharedArrayBuffer");
-	    if (index < 0 || (index & 15))
-		throw new Error("Synchronic at negative or unaligned index");
-	    if (index + 16 > sab.byteLength)
-		throw new Error("Synchronic extends beyond end of buffer");
-	    if (!sab._synchronic_int32_view)
-		sab._synchronic_int32_view = new SharedInt32Array(sab);
-	    if (!sab[taName])
-		sab[taName] = new constructor(sab);
-	    const bpe = constructor.BYTES_PER_ELEMENT;
-	    this._ta = sab[taName];
-	    this._taIdx = index / bpe;
-	    this._ia = sab._synchronic_int32_view;
-	    this._iaIdx = (index / 4) + offset;
-	    if (initialize)
-		Atomics.store(this._ta, this._taIdx, 0);
-	};
-
-    makeSynchronicFloatType.prototype = _Synchronic_float_methods;
-    makeSynchronicFloatType.BYTES_PER_ELEMENT = 16;
-
-    return makeSynchronicFloatType;
-}
-
-// Float constructors are commented out because the float atomics are not yet implemented.
-//
-// All but 32-bit constructors are commented out because they need to be rewritten to
-// handle atomic accesses of different size, see FIXME comment earlier.
-
-//var SynchronicInt8 = _Synchronic_constructorForInt(SharedInt8Array);
-//var SynchronicUint8 = _Synchronic_constructorForInt(SharedUint8Array);
-//var SynchronicInt16 = _Synchronic_constructorForInt(SharedInt16Array);
-//var SynchronicUint16 = _Synchronic_constructorForInt(SharedUint16Array);
+var SynchronicInt8 = _Synchronic_constructorForInt(SharedInt8Array);
+var SynchronicUint8 = _Synchronic_constructorForInt(SharedUint8Array);
+var SynchronicInt16 = _Synchronic_constructorForInt(SharedInt16Array);
+var SynchronicUint16 = _Synchronic_constructorForInt(SharedUint16Array);
 var SynchronicInt32 = _Synchronic_constructorForInt(SharedInt32Array);
 var SynchronicUint32 = _Synchronic_constructorForInt(SharedUint32Array);
-//var SynchronicFloat32 = _Synchronic_constructorForFloat(SharedFloat32Array);
-//var SynchronicFloat64 = _Synchronic_constructorForFloat(SharedFloat64Array);
