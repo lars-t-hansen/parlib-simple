@@ -3,8 +3,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
- * Simple queue for transmitting arrays of Int32 values - a useful
- * building block for other mechanisms.
+ * Simple shared-memory queue for transmitting arrays of Int32 values
+ * - a useful building block for other mechanisms.
  */
 
 // REQUIRE
@@ -120,16 +120,18 @@ IntQueue.prototype._acquireWithSpaceAvailable = function (required, t) {
     var limit = typeof t != "undefined" ? Date.now() + t : Number.POSITIVE_INFINITY;
     for (;;) {
 	this._acquire();
-	if (this._queue.length - this._meta[_IQ_USED] >= required)
-	    break;
+	var length = this._queue.length;
+	if (length - this._meta[_IQ_USED] >= required)
+	    return true;
 	var probe = this._spaceAvailable.load();
 	this._release();
+	if (required > length)
+	    throw new Error("Queue will never accept " + required + " words");
 	var remaining = limit - Date.now();
 	if (remaining <= 0)
 	    return false;
-	this._dataAvailable.expectUpdate(probe, remaining);
+	this._spaceAvailable.expectUpdate(probe, remaining);
     }
-    return true;
 }
 
 IntQueue.prototype._acquireWithDataAvailable = function (t) {
@@ -137,7 +139,7 @@ IntQueue.prototype._acquireWithDataAvailable = function (t) {
     for (;;) {
 	this._acquire();
 	if (this._meta[_IQ_USED] > 0)
-	    break;
+	    return true;
 	var probe = this._dataAvailable.load();
 	this._release();
 	var remaining = limit - Date.now();
@@ -145,7 +147,6 @@ IntQueue.prototype._acquireWithDataAvailable = function (t) {
 	    return false;
 	this._dataAvailable.expectUpdate(probe, remaining);
     }
-    return true;
 }
 
 IntQueue.prototype._releaseWithSpaceAvailable = function() {
@@ -160,7 +161,7 @@ IntQueue.prototype._releaseWithDataAvailable = function() {
 
 IntQueue.prototype._acquire = function () {
     while (this._lock.compareExchange(0, 1) != 0)
-	this._lock.loadWhenEqual(0);
+	this._lock.expectUpdate(1, Number.POSITIVE_INFINITY);
 }
 
 IntQueue.prototype._release = function () {
