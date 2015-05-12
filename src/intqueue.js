@@ -36,7 +36,7 @@ function IntQueue(sab, offset, length, initialize) {
 
     var intSize = 4;
     var synSize = SynchronicInt32.BYTES_PER_ELEMENT;
-    var a = new Arena(sab, offset, length);
+    var a = new ArrayBufferArena(sab, offset, length);
     this._spaceAvailable = new SynchronicInt32(sab, a.alloc(synSize, synSize), initialize);
     this._dataAvailable = new SynchronicInt32(sab, a.alloc(synSize, synSize), initialize);
     this._lock = new SynchronicInt32(sab, a.alloc(synSize, synSize), initialize);
