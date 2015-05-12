@@ -1,10 +1,10 @@
-// Test the message channel in ../src/send-message.js.
+// Test the message channel in ../src/channel.js.
 
 load("../src/arena.js");
 load("../src/synchronic.js");
 load("../src/intqueue.js");
 load("../src/marshaler.js");
-load("../src/send-message.js");
+load("../src/channel.js");
 
 // Basic test
 
@@ -22,7 +22,7 @@ load("../src/arena.js");
 load("../src/synchronic.js");
 load("../src/intqueue.js");
 load("../src/marshaler.js");
-load("../src/send-message.js");
+load("../src/channel.js");
 
 var iterations=${iterations};
 var sab = getSharedArrayBuffer();
