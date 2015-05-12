@@ -8,7 +8,12 @@
  * For motivation, see:
  * http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4195.pdf
  * https://code.google.com/p/synchronic/
+ *
+ * This is still work in progress, but the SynchronicInt32 code has
+ * been tested extensively and is probably solid.
  */
+
+"use strict";
 
 /* Synchronic API
  * --------------
@@ -27,6 +32,10 @@
  *
  * Similarly for Int8, Uint8, Int16, Uint16, Uint32, Float32, and
  * Float64.
+ *
+ * NOTE  Int variants other than 32-bits are currently disabled,
+ *       because the use of differently-sized atomics on the
+ *       same locations is not well-defined.  See FIXME later.
  *
  * NOTE  Float variants are currently disabled, because the Atomics
  *       support for float has not yet landed.
@@ -100,7 +109,7 @@
  */
 
 const _Synchronic_now = (function () {
-    if (this.performance && typeof performance.now == 'function')
+    if (typeof 'performance' != 'undefined' && typeof performance.now == 'function')
 	return performance.now.bind(performance);
     return Date.now.bind(Date);
 })();
@@ -121,8 +130,16 @@ const _Synchronic_now = (function () {
  */
 const _Synchronic_int_methods =
 {
+    // FIXME: The following code is well-defined only for Int32 and
+    // Uint32, since atomics of different access size to the same are
+    // are not actually atomic on all platforms.  Specifically,
+    // futexWait waits on the data location as an int32 while the
+    // other operations access it as whatever type synchronic this is.
+
     isLockFree: function () {
-	return Atomics.isLockFree(this._ta.BYTES_PER_ELEMENT);
+	// API not yet available
+	//return Atomics.isLockFree(this._ta.BYTES_PER_ELEMENT);
+	return true;
     },
 
     load: function () {
@@ -171,6 +188,7 @@ const _Synchronic_int_methods =
 	return v;
     },
 
+    /* API not yet available in Firefox */
     /*
     exchange: function (value) {
 	const v = Atomics.exchange(this._ta, this._taIdx, value);
@@ -254,6 +272,8 @@ const _Synchronic_constructorForInt = function (constructor) {
     // - _unsignedMask
     // - _coerce
 
+    const syncSize = 8;
+
     const makeSynchronicIntType =
 	function (sab, index, initialize) {
 	    index = index|0;
@@ -262,7 +282,7 @@ const _Synchronic_constructorForInt = function (constructor) {
 		throw new Error("Synchronic not onto SharedArrayBuffer");
 	    if (index < 0 || (index & 3))
 		throw new Error("Synchronic at negative or unaligned index");
-	    if (index + 4 > sab.byteLength)
+	    if (index + syncSize > sab.byteLength)
 		throw new Error("Synchronic extends beyond end of buffer");
 	    if (!sab._synchronic_int32_view)
 		sab._synchronic_int32_view = new SharedInt32Array(sab);
@@ -285,7 +305,7 @@ const _Synchronic_constructorForInt = function (constructor) {
 	};
 
     makeSynchronicIntType.prototype = _Synchronic_int_methods;
-    makeSynchronicIntType.BYTES_PER_ELEMENT = 8;
+    makeSynchronicIntType.BYTES_PER_ELEMENT = syncSize;
 
     return makeSynchronicIntType;
 }
@@ -519,10 +539,15 @@ const _Synchronic_constructorForFloat = function (constructor) {
     return makeSynchronicFloatType;
 }
 
-var SynchronicInt8 = _Synchronic_constructorForInt(SharedInt8Array);
-var SynchronicUint8 = _Synchronic_constructorForInt(SharedUint8Array);
-var SynchronicInt16 = _Synchronic_constructorForInt(SharedInt16Array);
-var SynchronicUint16 = _Synchronic_constructorForInt(SharedUint16Array);
+// Float constructors are commented out because the float atomics are not yet implemented.
+//
+// All but 32-bit constructors are commented out because they need to be rewritten to
+// handle atomic accesses of different size, see FIXME comment earlier.
+
+//var SynchronicInt8 = _Synchronic_constructorForInt(SharedInt8Array);
+//var SynchronicUint8 = _Synchronic_constructorForInt(SharedUint8Array);
+//var SynchronicInt16 = _Synchronic_constructorForInt(SharedInt16Array);
+//var SynchronicUint16 = _Synchronic_constructorForInt(SharedUint16Array);
 var SynchronicInt32 = _Synchronic_constructorForInt(SharedInt32Array);
 var SynchronicUint32 = _Synchronic_constructorForInt(SharedUint32Array);
 //var SynchronicFloat32 = _Synchronic_constructorForFloat(SharedFloat32Array);
