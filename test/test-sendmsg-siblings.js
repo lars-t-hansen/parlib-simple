@@ -5,10 +5,9 @@
 // Create two sibling workers, who share some memory that they use for
 // communication.
 
-// It is worrisome that this is only 50% the performance of
-// master-to-worker communication.  It suggests that workers are
-// performance-limited somehow.  (It could be that the JIT is
-// overloaded, I guess.)
+// This has the same performance as the master-to-worker case: about
+// 165000 msgs/sec (objects with a single field) on my late-2013
+// MacBook Pro.
 
 var iterations = 100000;
 

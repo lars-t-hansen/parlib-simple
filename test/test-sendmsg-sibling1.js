@@ -26,7 +26,7 @@ onmessage =
 		    c = r.receive();
 		}
 		var time = (Date.now() - start);
-		console.log("Time: " + time + "ms, perf=" + Math.round(iterations / (time / 1000)) + " msg/s");
+		console.log("Time: " + time + "ms, perf=" + Math.round((iterations*2) / (time / 1000)) + " msg/s");
 		console.log("worker " + id + " exiting");
 	    };
 	postMessage("ready");
