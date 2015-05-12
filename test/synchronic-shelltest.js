@@ -36,9 +36,6 @@ var then = Date.now();
 assertEq(s.loadWhenEqual(13), 13);
 print("Waited (B) " + (Date.now() - then) + " (should be approx 1000ms)");
 
-// Int8Array tests both sub-word logic and signed logic
-// Commented out because the Int8 API has been temporarily removed.
-/*
 var s = new SynchronicInt8(sab, 32, true);
 
 evalInWorker(`
@@ -46,7 +43,7 @@ load("../src/synchronic.js");
 var sab = getSharedArrayBuffer();
 var s = new SynchronicInt8(sab, 32);
 var then = Date.now();
-s.expectUpdate(-8, 500); // Should timeout before value is set
+s.expectUpdate(0, 500);  // Should timeout before value is set
 assertEq(s.load(), 0);   // Ergo value should be unchanged
 print("Waited (C) " + (Date.now() - then) + " (should be approx 500ms)");
 var then = Date.now();
@@ -56,4 +53,3 @@ print("Waited (D) " + (Date.now() - then) + " (should be approx 500ms)");
 
 sleep(1);
 s.store(-8);
-*/
