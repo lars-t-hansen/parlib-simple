@@ -1,0 +1,36 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+// Create two sibling workers, who share some memory that they use for
+// communication.
+
+// It is worrisome that this is only 50% the performance of
+// master-to-worker communication.  It suggests that workers are
+// performance-limited somehow.  (It could be that the JIT is
+// overloaded, I guess.)
+
+var iterations = 100000;
+
+var w1 = new Worker("test-sendmsg-sibling1.js");
+var w2 = new Worker("test-sendmsg-sibling2.js");
+var sab = new SharedArrayBuffer(8192);
+
+w1.onmessage = workerReady;
+w2.onmessage = workerReady;
+
+w1.postMessage(["setup", 1, sab, iterations], [sab]);
+w2.postMessage(["setup", 2, sab, iterations], [sab]);
+
+var waiting = 2;
+
+function workerReady(ev) {
+    --waiting;
+    if (waiting > 0)
+	return;
+
+    w1.postMessage(["go"]);
+    w2.postMessage(["go"]);
+}
+
+function runTest() {}
