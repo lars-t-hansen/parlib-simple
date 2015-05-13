@@ -6,7 +6,7 @@ load("../src/intqueue.js");
 
 var sab = new SharedArrayBuffer(4096); // Keep it short for better testing
 
-var q = new IntQueue(sab, 0, sab.byteLength, true);
+var q = new IntQueue(sab, 0, sab.byteLength);
 
 setSharedArrayBuffer(sab);
 

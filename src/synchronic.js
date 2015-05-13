@@ -18,14 +18,10 @@
  * The Synchronic constructors are type specific.  To construct a
  * Synchronic Int32 object do:
  *
- *   new SynchronicInt32(sab, index, initialize=false)
+ *   new SynchronicInt32(sab, index)
  *
- * where "sab" is a SharedArrayBuffer, "index" is a byte index within
- * sab that is divisible by (in this case) SynchronicInt32.BYTES_PER_ELEMENT
- * and "initialize" MUST be true for exactly one agent that creates
- * the Synchronic object on that particular area of memory.  That
- * initializing call MUST return before any methods may be called on
- * the synchronic in any agent.
+ * where "sab" is a SharedArrayBuffer and "index" is a byte index within
+ * sab that is divisible by (in this case) SynchronicInt32.BYTE_ALIGNMENT.
  *
  * Similarly for Int8, Uint8, Int16, Uint16, Uint32, Float32, Float64.
  *
@@ -35,6 +31,20 @@
  * any padding and control words; the memory required for an array of
  * Synchronic objects is thus the length of the array times the
  * BYTES_PER_ELEMENT value for the base type.
+ *
+ * The memory covered by the Synchronic MUST be zero-filled before the
+ * synchronic is constructed on it, and that zero-filling MUST be
+ * observable in the constructing agent when the constructor is
+ * called.
+ *
+ * Each constructor function has a property BYTE_ALIGNMENT, which
+ * denotes the required alignment for a Synchronic of the base type.
+ *
+ * One may assume that BYTES_PER_ELEMENT is some integer multiple of
+ * BYTE_ALIGNMENT.
+ *
+ * Do not construct synchronics of different base type on the same
+ * memory.
  *
  * All Synchronic objects have the following value manipulation
  * methods (all are atomic and mirror their counterparts on the
@@ -89,13 +99,10 @@
  *
  * TODO:
  *
- *  - we /might/ need the updating methods to take a hint about how
+ *  - We /might/ need the updating methods to take a hint about how
  *    many waiters to wake.  The C++ proposal has none/one/all.  But
  *    hints are not great for JS - we'd like something binding, or
  *    nothing at all.
- *
- *  - the requirement that the allocation address be divisible by
- *    the size of the synchronic is stricter than necessary.
  */
 
 /*
@@ -114,6 +121,7 @@
  * later.
  */
 const _SYN_SYNSIZE = 16;
+const _SYN_SYNALIGN = 8;
 
 const _SYN_NUMWAIT = 0;
 const _SYN_WAITGEN = 1;
@@ -416,34 +424,40 @@ const _Synchronic_constructor = function (constructor, methods) {
 
     const taName = "_synchronic_" + tag + "_view";
 
-    const makeSynchronicType =
-	function (sab, offset, initialize) {
-	    offset = offset|0;
-	    initialize = !!initialize;
-	    if (!(sab instanceof SharedArrayBuffer))
-		throw new Error("Synchronic not onto SharedArrayBuffer");
-	    if (offset < 0 || (offset & (_SYN_SYNSIZE-1)))
-		throw new Error("Synchronic at negative or unaligned index");
-	    if (offset + _SYN_SYNSIZE > sab.byteLength)
-		throw new Error("Synchronic extends beyond end of buffer");
-	    if (!sab._synchronic_int32_view)
-		sab._synchronic_int32_view = new SharedInt32Array(sab);
-	    if (!sab[taName])
-		sab[taName] = new constructor(sab);
-	    this._ta = sab[taName];
-	    this._taIdx = (offset + 8) / constructor.BYTES_PER_ELEMENT;
-	    this._ia = sab._synchronic_int32_view;
-	    this._iaIdx = offset / 4;
-	    this._coerce = tag == "uint32" ? _coerce_uint : _coerce_int;
-	    if (initialize) {
-		this._ta[this._taIdx] = 0;
-		Atomics.store(this._ia, this._iaIdx+_SYN_WAITGEN, 0);
-		Atomics.store(this._ia, this._iaIdx+_SYN_NUMWAIT, 0);
-	    }
-	};
+    const makeSynchronicType = function (sab, offset) {
+	offset = offset|0;
+	if (!(sab instanceof SharedArrayBuffer))
+	    throw new Error("Synchronic not onto SharedArrayBuffer");
+	if (offset < 0 || (offset & (_SYN_SYNALIGN-1)))
+	    throw new Error("Synchronic at negative or unaligned index");
+	if (offset + _SYN_SYNSIZE > sab.byteLength)
+	    throw new Error("Synchronic extends beyond end of buffer");
+	if (!sab._synchronic_int32_view)
+	    sab._synchronic_int32_view = new SharedInt32Array(sab);
+	if (!sab[taName])
+	    sab[taName] = new constructor(sab);
+	this._ta = sab[taName];
+	this._taIdx = (offset + 8) / constructor.BYTES_PER_ELEMENT;
+	this._ia = sab._synchronic_int32_view;
+	this._iaIdx = offset / 4;
+	this._coerce = tag == "uint32" ? _coerce_uint : _coerce_int;
+
+	// If initialization beyond zero-fill is needed then the
+	// constructor might arrange for initialization by an atomic
+	// protocol where it transitions some word of the synchronic
+	// from 0 -> x -> y where y is the final initialized value and
+	// x signifies an intermediate state.  The constructor call
+	// that succeeds in storing x performs initialization; the
+	// other calls spin while the value is x.  Usefully, x would
+	// be an invalid value for that field during operation, for
+	// example, it could be -1 in the _SYN_NUMWAIT field.
+	//
+	// We have no such needs, zero-initialization is just fine.
+    };
 
     makeSynchronicType.prototype = methods;
     makeSynchronicType.BYTES_PER_ELEMENT = _SYN_SYNSIZE;
+    makeSynchronicType.BYTE_ALIGNMENT = _SYN_SYNALIGN;
 
     return makeSynchronicType;
 }

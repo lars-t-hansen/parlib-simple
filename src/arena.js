@@ -29,6 +29,7 @@ function ArrayBufferArena(ab, offset, length) {
     this._ab = ab;
     this._offset = offset;
     this._limit = offset + length;
+    this._initMem = null;
 }
 
 /*
@@ -40,13 +41,19 @@ Object.defineProperty(ArrayBufferArena.prototype,
 
 /*
  * Allocate nbytes, aligned on "align" bytes (not optional) within the buffer.
+ * If "initialize" is true then zero-fill the memory.
  * Returns the offset within the buffer of the newly allocated area.
  * Throws an Error on heap overflow.
  */
-ArrayBufferArena.prototype.alloc = function (nbytes, align) {
+ArrayBufferArena.prototype.alloc = function (nbytes, align, initialize) {
     var p = this._alignPtr(align);
     if (p + nbytes <= this._limit) {
 	this._offset = p + nbytes;
+	if (initialize) {
+	    var mem = this._getInitMem();
+	    for ( var i=p, limit=p+nbytes ; i < limit ; i++ )
+		mem[i] = 0;
+	}
 	return p;
     }
     throw new Error("ArrayBufferArena exhausted");
@@ -68,4 +75,17 @@ ArrayBufferArena.prototype._alignPtr = function (align) {
     if ((align|0) !== align || align < 0)
 	throw new Error("Bad alignment: " + align)
     return Math.floor((this._offset + (align - 1)) / align) * align;
+}
+
+ArrayBufferArena.prototype._getInitMem = function () {
+    if (!this._initMem) {
+	var ab = this._ab;
+	var offset = this._offset;
+	var length = this._limit - offset;
+	if (ab instanceof SharedArrayBuffer)
+	    this._initMem = new SharedInt8Array(ab, offset, length);
+	else
+	    this._initMem = new Int8Array(ab, offset, length);
+    }
+    return this._initMem;
 }

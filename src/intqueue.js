@@ -25,31 +25,24 @@ const _IQ_TAIL = 2;
  * length must be the length of a segment within that array.
  * length-offset must have space for metadata and queue data.
  *   An upper bound on metadata is given by IntQueue.NUMBYTES.
- * If initialize==true then initialize the shared memory for the queue.
- *   Initialization must only be performed in one agent.
  *
- * Constructors may be called concurrently in all agents but the queue
- * must not be used in any agent until the constructor that performs
- * the initialization has returned.
+ * Constructors may be called concurrently in all agents provided the
+ * memory that will be used has been zero-filled and the zeroes are
+ * visible in the calling agent when the constructor is called.
  */
-function IntQueue(sab, offset, length, initialize) {
-    initialize = !!initialize;
-
+function IntQueue(sab, offset, length) {
     var intSize = 4;
     var synSize = SynchronicInt32.BYTES_PER_ELEMENT;
+    var synAlign = SynchronicInt32.BYTE_ALIGNMENT;
     var a = new ArrayBufferArena(sab, offset, length);
-    this._spaceAvailable = new SynchronicInt32(sab, a.alloc(synSize, synSize), initialize);
-    this._dataAvailable = new SynchronicInt32(sab, a.alloc(synSize, synSize), initialize);
-    this._lock = new SynchronicInt32(sab, a.alloc(synSize, synSize), initialize);
+
+    this._spaceAvailable = new SynchronicInt32(sab, a.alloc(synSize, synAlign));
+    this._dataAvailable = new SynchronicInt32(sab, a.alloc(synSize, synAlign));
+    this._lock = new SynchronicInt32(sab, a.alloc(synSize, synAlign));
+
     this._meta = new SharedInt32Array(sab, a.alloc(intSize*3, intSize), 3);
     var qlen = Math.floor(a.available(intSize) / intSize);
     this._queue = new SharedInt32Array(sab, a.alloc(intSize*qlen, intSize), qlen);
-
-    if (initialize) {
-	Atomics.store(this._meta, _IQ_USED, 0);
-	Atomics.store(this._meta, _IQ_HEAD, 0);
-	Atomics.store(this._meta, _IQ_TAIL, 0);
-    }
 }
 
 /*
@@ -159,6 +152,8 @@ IntQueue.prototype._releaseWithDataAvailable = function() {
     this._dataAvailable.add(1);
     this._release();
 }
+
+// The locking protocol must not access the _meta data.
 
 IntQueue.prototype._acquire = function () {
     while (this._lock.compareExchange(0, 1) != 0)
