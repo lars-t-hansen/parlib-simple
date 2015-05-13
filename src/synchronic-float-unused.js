@@ -4,15 +4,7 @@
 
 // FLOAT CODE IS NOT TESTED YET
 // See synchronic.js for more information.
-
-// This should be a method.
-
-const _Synchronic_now = (function () {
-    if (typeof 'performance' != 'undefined' && typeof performance.now == 'function')
-	return performance.now.bind(performance);
-    return Date.now.bind(Date);
-})();
-
+// This code will / should be folded into synchronic.js once it's tested.
 
 /* For the float methods we use a seqLock to coordinate access to the
  * datum because the datum comprises both the value in the cell and
@@ -30,18 +22,36 @@ const _Synchronic_now = (function () {
    since we need both the sequence number and a count of waiters.
    */
 
+/* For Float64:
+   - one part
+   - the other part
+   - waiter count
+   - wait word: high 31 bits are generation number, low bit is spinlock
+
+   For Float32 - can't use int methods for add and sub, but can use CAS loop for that.
+   - the value
+   - unused
+   - waiter count
+   - wait word: high 31 bits are generation number, low bit is spinlock
+*/
+
+// TODO: split this apart.
+
 const _Synchronic_float_methods =
 {
     load: function () {
-	var [v,_] = this._read();
+	this._acquire();
+	var v = this._ta[this._taIdx];
+	this._release();
 	return v;
     },
 
     store: function (value_) {
 	var value = +value_;
-	var seq0 = this._acquireWrite();
-	Atomics.store(this._ta, this._taIdx, value);
-	this._releaseWrite(seq0);
+	this._acquire();
+	this._ta[this._taIdx] = value;
+	this._release();
+	this._notify();
     },
 
     // If the value in the cell and oldval are both zero but with
@@ -78,32 +88,32 @@ const _Synchronic_float_methods =
 
     add: function (value_) {
 	var value = +value_;
-	var seq0 = this._acquireWrite();
-	const ta = this._ta;
-	const taIdx = this._taIdx;
-	var v = Atomics.load(ta, taIdx);
-	Atomics.store(ta, taIdx, v+value);
-	this._releaseWrite(seq0);
-	return v;
+	this._acquire();
+	var oldval = this._ta[this._taIdx];
+	this._ta[this._taIdx] = oldval + value;
+	this._release();
+	this._notify();
+	return oldval;
     },
 
     sub: function (value_) {
 	var value = +value_;
-	var seq0 = this._acquireWrite();
-	const ta = this._ta;
-	const taIdx = this._taIdx;
-	var v = Atomics.load(ta, taIdx);
-	Atomics.store(ta, taIdx, value);
-	this._releaseWrite(seq0);
-	return v;
+	this._acquire();
+	var oldval = this._ta[this._taIdx];
+	this._ta[this._taIdx] = oldval - value;
+	this._release();
+	this._notify();
+	return oldval;
     },
 
     exchange: function (value_) {
 	var value = +value_;
-	var seq0 = this._acquireWrite();
-	var v = Atomics.exchange(this._ta, this._taIdx, value);
-	this._releaseWrite(seq0);
-	return v;
+	this._acquire();
+	var oldval = this._ta[this._taIdx];
+	this._ta[this._taIdx] = value;
+	this._release();
+	this._notify();
+	return oldval;
     },
 
     // a equals b iff a === b || isNaN(a) && isNaN(b)
@@ -149,6 +159,17 @@ const _Synchronic_float_methods =
 	this._notify();
     },
 
+    // Simple spinlock.
+
+    _acquire: function () {
+	while (Atomics.compareExchange(this._ia, this._iaIdx+2, 0, 1) == 1)
+	    ;
+    },
+
+    _release: function () {
+	Atomics.store(this._ia, this._iaIdx+2, 0);
+    },
+
     _read: function () {
 	const ia = this._ia;
 	const iaIdx = this._iaIdx;
@@ -192,12 +213,22 @@ const _Synchronic_float_methods =
     },
 
     _notify: function () {
+	Atomics.add(this._ia, this._iaIdx+2, 1);
+	if (Atomics.load(this._ia, this._iaIdx+1) > 0)
+	    Atomics.futexWake(this._ia, this._iaIdx+2, Number.POSITIVE_INFINITY);
+    },
+
+    _notify: function () {
 	const ia = this._ia;
 	const iaIdx = this._iaIdx;
 
 	if (Atomics.load(ia, iaIdx+1))
 	    Atomics.futexWake(ia, iaIdx, Number.POSITIVE_INFINITY);
-    }
+    },
+
+    _now: (typeof 'performance' != 'undefined' && typeof performance.now == 'function'
+	   ? performance.now.bind(performance)
+	   : Date.now.bind(Date))
 };
 
 const _Synchronic_constructorForFloat = function (constructor) {

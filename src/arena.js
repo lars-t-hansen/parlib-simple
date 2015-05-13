@@ -2,24 +2,26 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-"use strict";
-
 /*
- * Simple non-shared bump-allocating arena.  Handles alignment and
- * allocation pointer/limit management in a SharedArrayBuffer or
- * ArrayBuffer.
+ * A very simple allocator for bump-allocation within a SharedArrayBuffer
+ * or ArrayBuffer, with integrated alignment management.
  */
+
+"use strict";
 
 /*
  * Construct the arena.
  *
- * ab must be an ArrayBuffer or SharedArrayBuffer, offset must be a
- * valid index, offset + length - 1 must be a valid index, and length
- * must be nonnegative.
+ * ab must be an ArrayBuffer or SharedArrayBuffer.
+ * offset must be a valid index within ab.
+ * length must be a nonnegative integer.
+ * offset + length - 1 must be a valid index within ab.
  */
 function ArrayBufferArena(ab, offset, length) {
     if (!((ab instanceof SharedArrayBuffer || ab instanceof ArrayBuffer) &&
+	  (offset|0) === offset &&
 	  offset >= 0 && offset < ab.byteLength &&
+	  (length|0) === length &&
 	  length >= 0 && offset + length <= ab.byteLength))
     {
 	throw new Error("Bad arena parameters: " + ab + " " + offset + " " + length);
@@ -30,16 +32,16 @@ function ArrayBufferArena(ab, offset, length) {
 }
 
 /*
- * Return the underlying buffer.
+ * Returns the underlying buffer.
  */
 Object.defineProperty(ArrayBufferArena.prototype,
 		      "buffer",
 		      { get: function () { return this._ab } });
 
 /*
- * Allocate nbytes, aligned on "align" (not optional).
- * Throw an error on overflow.
- * Return the offset within the sab of the newly allocated area.
+ * Allocate nbytes, aligned on "align" bytes (not optional) within the buffer.
+ * Returns the offset within the buffer of the newly allocated area.
+ * Throws an Error on heap overflow.
  */
 ArrayBufferArena.prototype.alloc = function (nbytes, align) {
     var p = this._alignPtr(align);
@@ -51,8 +53,9 @@ ArrayBufferArena.prototype.alloc = function (nbytes, align) {
 }
 
 /*
- * Return the amount of space that would be available to an allocation
- * aligned on "align" (not optional).
+ * Compute the amount of space that would be available to an allocation
+ * aligned on "align" bytes (not optional).
+ * Returns that amount.
  */
 ArrayBufferArena.prototype.available = function (align) {
     var p = this._alignPtr(align);

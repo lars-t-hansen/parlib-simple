@@ -22,6 +22,9 @@
 //   0: unlocked
 //   1: locked with no waiters
 //   2: locked with possible waiters
+//
+// This could be built on Synchronic instead, but this code predates
+// the Synchronic facility.
 
 "use strict";
 
@@ -111,10 +114,12 @@ Lock.prototype.toString =
 // be initialized once by calling Cond.initialize() on the memory,
 // before constructing the first Cond object in any agent.
 //
-// 
+//
 // Implementation note:
 // The condvar code is based on http://locklessinc.com/articles/mutex_cv_futex,
 // though modified because some optimizations in that code don't quite apply.
+//
+// Again, using Synchronic might be easier.
 
 // Create a condition variable that can wait on a lock.
 //

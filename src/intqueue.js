@@ -3,8 +3,9 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /*
- * Simple shared-memory queue for transmitting arrays of Int32 values
- * - a useful building block for other mechanisms.
+ * Simple multi-producer and multi-consumer shared-memory queue for
+ * transmitting arrays of Int32 values - a useful building block for
+ * other mechanisms.
  */
 
 // REQUIRE

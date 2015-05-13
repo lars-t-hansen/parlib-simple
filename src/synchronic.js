@@ -29,7 +29,7 @@
  *
  * Similarly for Int8, Uint8, Int16, Uint16, and Uint32.
  *
- * NOTE  Float variants are not yet supported.
+ * NOTE  Float variants are not yet supported, but will be.
  *
  * Each constructor function has a property BYTES_PER_ELEMENT, which
  * denotes the number of bytes in the SharedArrayBuffer that MUST be
@@ -62,31 +62,33 @@
  * Finally, objects have methods that wait for and signal events:
  *
  * - loadWhenEqual(x) waits until the value in the object is observed
- *   to be x.  It then returns the value in the cell (which may no
- *   longer be x).
+ *   to be x, this could be immediately.  It then returns the value in
+ *   the cell (which may no longer be x).
  *
  * - loadWhenNotEqual(x) waits until the value in the object is
- *   observed to be other than x.  It then returns the value in the
- *   cell (which may once again be x).
+ *   observed to be other than x, this could be immediately.  It then
+ *   returns the value in the cell (which may once again be x).
  *
  * - expectUpdate(x, t) waits until the value in the cell may no
- *   longer be x or t milliseconds have passed.  It returns nothing.
+ *   longer be x - this could be immediately - or t milliseconds have
+ *   passed.  It returns nothing.
  *
  * - notify() asks all waiters to re-check their waiting conditions.
  *
- *
  * The methods that store values in the object will send notifications
- * as appropriate.
+ * as appropriate, there is rarely a need to call notify().
  *
- * Synchronization [NEEDS WORK]
+ * Synchronization:
  *
- * - loadWhenEqual(), loadWhenNotEqual(), load(), and expectUpdate()
- *   synchronize-with notify(), which is (notionally) invoked by the
- *   methods that store values: store, compareExchange, add, sub, and,
- *   or, xor, and exchange
+ * - The methods that load are: loadWhenEqual(), loadWhenNotEqual(),
+ *   load(), expectUpdate(), add(), sub(), and(), or(), xor(),
+ *   compareExchange(), and exchange().
  *
- * - actually it's more complicated of course since add, sub etc are
- *   both load and store.
+ * - The methods that store are: store(), add(), sub(), and(), or(),
+ *   xor(), compareExchange(), notify(), and exchange().
+ *
+ * - A call that stores into a synchronic S synchronizes-with
+ *   temporally succeeding calls that load from S.
  *
  *
  * TODO:
@@ -95,21 +97,17 @@
  *    many waiters to wake.  The C++ proposal has none/one/all.  But
  *    hints are not great for JS - we'd like something binding, or
  *    nothing at all.
+ *
+ *  - the requirement that the allocation address be divisible by
+ *    the size of the synchronic is stricter than necessary.
  */
 
-/* A Synchronic for integer types occupies 8 bytes.  The first four
- * bytes hold the value, the last four bytes hold a counter for the
- * number of waiting threads.
- *
- * For byte and halfword types the value is arranged in the low half
- * of the four-byte datum.
- *
- * Atomics.futexWait can only wait on an int32; it waits on the entire
- * first data word.  If the byte size of the element type is less than
- * 4 then the data are in the low bytes of the data word when it is
- * loaded as an int32.  When loaded as an int32 the upper bits will
- * always be zero, so the currentValue that guards the wait must be
- * stripped of its high bits before we use it.
+/*
+ * A synchronic<integer> is 16 bytes / 4 ints, as follows:
+ *  - the value, four bytes but not all may be used, accessed atomically
+ *  - the number of waiters
+ *  - the wait word, a generation number used for futexWait / futexWake
+ *  - unused
  */
 const _Synchronic_int_methods =
 {
@@ -233,12 +231,6 @@ const _Synchronic_int_methods =
 	   ? performance.now.bind(performance)
 	   : Date.now.bind(Date))
 };
-
-// A synchronic<integer> is 16 bytes / 4 ints, as follows:
-//  - the value, four bytes but not all may be used, accessed atomically
-//  - the number of waiters
-//  - the wait word, a generation number used for futexWait / futexWake
-//  - unused
 
 const _Synchronic_constructorForInt = function (constructor) {
     const BIG = 1;

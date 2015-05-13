@@ -2,10 +2,12 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// Simple multi-producer multi-consumer bounded buffer.
-// 2015-01-19 / lhansen@mozilla.com
-//
-// NOTE: you must load lock.js before this file.
+/*
+ * Simple multi-producer multi-consumer bounded buffer.
+ */
+
+// REQUIRE
+//   lock.js
 
 "use strict";
 
@@ -104,7 +106,7 @@ Buffer.prototype.take =
 	const availIdx = ibase+2;
 	const producersWaitingIdx = ibase+3;
 	const consumersWaitingIdx = ibase+4;
-	
+
         this.lock.lock();
         while (iab[availIdx] == 0) {
 	    iab[consumersWaitingIdx]++;

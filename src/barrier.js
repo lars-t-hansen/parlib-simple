@@ -16,6 +16,10 @@
 // initialized once by calling Barrier.initialize() on the memory,
 // before constructing the first Barrier object in any agent.
 
+// Implementation note: This barrier predates the Synchronic facility
+// and is therefore implemented on top of bare atomics and futexes.
+// It could equally well be implemented on top of Synchronic.
+
 // Create a barrier object.
 //
 // 'iab' is a SharedInt32Array.

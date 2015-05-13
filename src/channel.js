@@ -2,13 +2,16 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// Simple unidirectional marshaling shared-memory channel.
-//
-// This is by and large like postMessage except that it cannot
-// transfer ArrayBuffer values (it can only copy them), and it cannot
-// send or receive SharedArrayBuffer values at all.  Also, the
-// marshaler currently does not deal with circular/shared structure
-// but that's fixable.
+/*
+ * Simple unidirectional marshaling shared-memory channel.  There can
+ * be multiple senders and multiple receivers.
+ *
+ * This is by and large like postMessage() except that it cannot
+ * transfer ArrayBuffer values (it can only copy them), and it cannot
+ * send or receive SharedArrayBuffer values at all.  Also, the
+ * marshaler currently does not deal with circular/shared structure
+ * but that's fixable.
+ */
 
 // REQUIRE:
 //   arena.js
@@ -19,16 +22,16 @@
 "use strict";
 
 /*
- * Create the sender endpoint of the channel.
+ * Create a sender endpoint of the channel.
  *
  * "sab" is a SharedArrayBuffer, "offset" is a byte offset within that
- * buffer, and "length" is the length of the region reserved as a
- * message buffer.  "offset" and "length" should be evenly divisible
- * by eight.
+ * buffer, "length" is the length of the region reserved as a message
+ * buffer, and "initialize" should be true in exactly one constructor
+ * call on that memory (be it sender or receiver).
  *
- * Both endpoints must be created before either send or receive may be
- * called on the channel.  Both endpoints must be created with the
- * same values for sab, offset, and length.
+ * All endpoints must be created before either send or receive may be
+ * called on the channel.  All endpoints must be created with the same
+ * values for sab, offset, and length.
  *
  * How much space will you need?  The channel transmits a stream of
  * tag+value pairs, or fieldname+tag+value triples in objects.  It
@@ -66,7 +69,7 @@ ChannelSender.prototype.send = function(msg, t) {
 }
 
 /*
- * Create the receiver endpoint.  See comments on the sender endpoint.
+ * Create a receiver endpoint.  See comments on the sender endpoint.
  */
 function ChannelReceiver(sab, offset, length, initialize) {
     this._queue = new IntQueue(sab, offset, length, initialize);
