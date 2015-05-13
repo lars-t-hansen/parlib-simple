@@ -47,6 +47,7 @@
  * - add(v) adds v to the object and returns the old value
  * - sub(v) subtracts v from the object and returns the old value
  * - exchange(v) stores v in the object and returns the old value
+ * - isLockFree() returns true if the synchronic is lock free
  *
  * Integer objects additionally have these methods:
  *
@@ -79,8 +80,8 @@
  *   load(), expectUpdate(), add(), sub(), and(), or(), xor(),
  *   compareExchange(), and exchange().
  *
- * - The methods that store are: store(), add(), sub(), and(), or(),
- *   xor(), compareExchange(), notify(), and exchange().
+ * - The methods that store are: store(), notify(), add(), sub(), and(),
+ *   or(), xor(), compareExchange(), and exchange().
  *
  * - A call that stores into a synchronic S synchronizes-with
  *   temporally succeeding calls that load from S.
@@ -106,7 +107,7 @@
  *  - first value word
  *  - second value word
  *
- * Integer types less than 32 bytes use part of the first value word.
+ * Integer types less than 32 bits use part of the first value word.
  * Only Float64 uses the second value word.
  *
  * The wait word is a little more complex for floating types, see
@@ -239,9 +240,12 @@ const _Synchronic_int_methods =
 };
 
 /*
+ * For floating types use spinlocks, since we have no Atomics.
+ *
  * Float32 and Float64 use the same spinlocked code since the Float32
  * code using Atomics would otherwise have to transfer the value
- * through memory, it seems like overkill to specialize for that (yet).
+ * through memory, it seems like overkill to specialize for that at
+ * this point.
  *
  * This uses the same layout as the int code, with the following
  * tweak: the wait word (_SYN_WAITGEN) has two fields, the low bit is
