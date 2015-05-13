@@ -18,11 +18,8 @@ var iterations = 100000;
 var w = new Worker("test-sendmsg-worker.js");
 var sab = new SharedArrayBuffer(8192);
 
-// Init code is wrong: the fourth argument is ignored, and the sender always
-// initializes.  That should not matter for now, but we should fix.
-
-var s = new ChannelSender(sab, 0, 4096, true);
-var r = new ChannelReceiver(sab, 4096, 4096, true);
+var s = new ChannelSender(sab, 0, 4096);
+var r = new ChannelReceiver(sab, 4096, 4096);
 
 // Do not kick off the worker until we're done constructing state.
 // The worker will send a message back when it too is ready.

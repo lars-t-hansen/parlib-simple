@@ -12,8 +12,8 @@ onmessage =
     function (ev) {
 	var [_, id, sab, iterations] = ev.data;
 	console.log("setting up " + id);
-	s = new ChannelSender(sab, 0, 4096, true);
-	r = new ChannelReceiver(sab, 4096, 4096, true);
+	s = new ChannelSender(sab, 0, 4096);
+	r = new ChannelReceiver(sab, 4096, 4096);
 	onmessage =
 	    function firstSibling(ev) {
 		console.log("running " + id);

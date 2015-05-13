@@ -69,6 +69,23 @@ ArrayBufferArena.prototype.available = function (align) {
     return Math.max(this._limit - p, 0);
 }
 
+/*
+ * Fill the memory of the buffer in the range [p, p+len) with bytes of
+ * value val and optionally perform a synchronizing operation at the end.
+ * Throws an error on out-of-bounds accesses.
+ */
+ArrayBufferArena.prototype.memset = function (p, val, len, synchronize) {
+    if (len == 0)
+	return;
+    var mem = this._getInitMem();
+    if (!((p|0) === p && p >= 0 && p <= mem.length && (len|0) === len && len >= 0 && p + len <= mem.length))
+	throw new Error("Bad memory range: " + p + " " + len);
+    for ( var i=p, limit=p+len ; i < limit ; i++ )
+	mem[i] = val;
+    if (synchronize)
+	Atomics.store(mem, p, val);
+}
+
 // Internal methods beyond this point.
 
 ArrayBufferArena.prototype._alignPtr = function (align) {
@@ -83,9 +100,9 @@ ArrayBufferArena.prototype._getInitMem = function () {
 	var offset = this._offset;
 	var length = this._limit - offset;
 	if (ab instanceof SharedArrayBuffer)
-	    this._initMem = new SharedInt8Array(ab, offset, length);
+	    this._initMem = new SharedInt8Array(ab, 0, offset+length);
 	else
-	    this._initMem = new Int8Array(ab, offset, length);
+	    this._initMem = new Int8Array(ab, 0, offset+length);
     }
     return this._initMem;
 }
