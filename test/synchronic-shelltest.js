@@ -1,6 +1,6 @@
 load("../src/synchronic.js");
 
-// Basic test
+// Basic tests
 
 var sab = new SharedArrayBuffer(4096);
 
@@ -53,3 +53,72 @@ print("Waited (D) " + (Date.now() - then) + " (should be approx 500ms)");
 
 sleep(1);
 s.store(-8);
+sleep(1);
+
+// Ditto float
+
+print("Float32");
+
+var s = new SynchronicFloat32(sab, 48, true);
+assertEq(s.load(), 0);
+s.store(37.5);
+assertEq(s.load(), 37.5);
+s.store(-42.5);
+assertEq(s.load(), -42.5);
+assertEq(s.add(5), -42.5);
+assertEq(s.load(), -37.5);
+
+setSharedArrayBuffer(sab);
+
+evalInWorker(`
+load("../src/synchronic.js");
+var sab = getSharedArrayBuffer();
+var s = new SynchronicFloat32(sab, 48);
+assertEq(s.load(), -37.5);
+assertEq(s.loadWhenEqual(-37.5), -37.5);
+var then = Date.now();
+assertEq(s.loadWhenEqual(12.5), 12.5);
+print("Waited (A) " + (Date.now() - then) + " (should be approx 1000ms)");
+sleep(1);
+s.store(13.5);
+`);
+
+sleep(1);
+s.store(12.5);
+
+var then = Date.now();
+assertEq(s.loadWhenEqual(13.5), 13.5);
+print("Waited (B) " + (Date.now() - then) + " (should be approx 1000ms)");
+
+print("Float64");
+
+var s = new SynchronicFloat64(sab, 48, true);
+assertEq(s.load(), 0);
+s.store(37.5);
+assertEq(s.load(), 37.5);
+s.store(-42.5);
+assertEq(s.load(), -42.5);
+assertEq(s.add(5), -42.5);
+assertEq(s.load(), -37.5);
+
+setSharedArrayBuffer(sab);
+
+evalInWorker(`
+load("../src/synchronic.js");
+var sab = getSharedArrayBuffer();
+var s = new SynchronicFloat64(sab, 48);
+assertEq(s.load(), -37.5);
+assertEq(s.loadWhenEqual(-37.5), -37.5);
+var then = Date.now();
+assertEq(s.loadWhenEqual(12.5), 12.5);
+print("Waited (A) " + (Date.now() - then) + " (should be approx 1000ms)");
+sleep(1);
+s.store(13.5);
+`);
+
+sleep(1);
+s.store(12.5);
+
+var then = Date.now();
+assertEq(s.loadWhenEqual(13.5), 13.5);
+print("Waited (B) " + (Date.now() - then) + " (should be approx 1000ms)");
