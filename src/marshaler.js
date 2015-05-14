@@ -58,7 +58,7 @@
 // unmarshaler object and on an array containing the same integer
 // values (including the tag) that were returned from the marshaling.
 
-"use strict";
+//"use strict";
 
 // Construct a new marshaler.
 

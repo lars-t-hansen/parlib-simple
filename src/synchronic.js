@@ -10,7 +10,7 @@
  * https://code.google.com/p/synchronic/
  */
 
-"use strict";
+//"use strict";
 
 /* Synchronic API
  * --------------
