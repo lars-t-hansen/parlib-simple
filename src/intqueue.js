@@ -6,6 +6,8 @@
  * Simple multi-producer and multi-consumer shared-memory queue for
  * transmitting arrays of Int32 values - a useful building block for
  * other mechanisms.
+ *
+ * TODO: perhaps generalize this to bundles of same-typed elements.
  */
 
 // REQUIRE

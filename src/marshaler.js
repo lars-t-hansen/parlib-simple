@@ -2,8 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// A Marshaler is a utility object for transmitting values among
-// agents through shared memory.
+// A Marshaler is a utility type for flattening and reconstituting
+// values, to allow them to be transmitted through shared memory.
 //
 // The marshaler does not itself use shared memory, but encodes values
 // and maintains state about shared arrays that have been seen

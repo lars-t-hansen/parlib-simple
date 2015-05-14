@@ -4,6 +4,14 @@
 
 /*
  * Simple multi-producer multi-consumer bounded buffer.
+ *
+ * This is built on the locks and condition variables in lock.js and
+ * is fairly limited, but supports any primitive type of element (eg,
+ * it can be constructed on top of a SharedFloat64Array).
+ *
+ * For an alternative approach that supports bundles of integer items
+ * and that also allows for timeouts, and which is built on
+ * Synchronic, see intqueue.js.
  */
 
 // REQUIRE

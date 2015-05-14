@@ -71,7 +71,8 @@ ArrayBufferArena.prototype.available = function (align) {
 
 /*
  * Fill the memory of the buffer in the range [p, p+len) with bytes of
- * value val and optionally perform a synchronizing operation at the end.
+ * value val and optionally perform a synchronizing operation at the end
+ * (synchronization is only valid if the buffer is a SharedArrayBuffer).
  * Throws an error on out-of-bounds accesses.
  */
 ArrayBufferArena.prototype.memset = function (p, val, len, synchronize) {
@@ -82,7 +83,7 @@ ArrayBufferArena.prototype.memset = function (p, val, len, synchronize) {
 	throw new Error("Bad memory range: " + p + " " + len);
     for ( var i=p, limit=p+len ; i < limit ; i++ )
 	mem[i] = val;
-    if (synchronize)
+    if (synchronize && this._ab instanceof SharedArrayBuffer)
 	Atomics.store(mem, p, val);
 }
 
