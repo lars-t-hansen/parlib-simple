@@ -231,6 +231,32 @@ const _Synchronic_int_methods =
     },
 
     _waitForUpdate: function (tag, timeout) {
+	// Spin for a short time before going into the futexWait.
+	//
+	// Hard to know what a good count should be - it is machine
+	// dependent, for sure, and "typical" applications should
+	// influence the choice.  If the count is high without
+	// hindering an eventual drop into futexWait then it will just
+	// decrease performance.  If the count is low it is pointless.
+	// (This is why Synchronic really wants a native
+	// implementation.)
+	//
+	// Data points from a 2.6GHz i7:
+	//
+	// - the simple send-integer benchmark (test-sendint.html),
+	//   which is the very simplest case we can really imagine,
+	//   gets flaky timings with a count below 4000
+	// - the simple send-object benchmark (test-sendmsg.html)
+	//   gets a boost when the count is at least 10000
+	//
+	// 10000 is perhaps 5us (CPI=1, naive) and seems like a
+	// reasonable cutoff, for now.
+	var i = 10000;
+	do {
+	    // May want this to be a relaxed load, though on x86 it won't matter.
+	    if (Atomics.load(this._ia, this._iaIdx+_SYN_WAITGEN) != tag)
+		return;
+	} while (--i > 0);
 	Atomics.add(this._ia, this._iaIdx+_SYN_NUMWAIT, 1);
 	Atomics.futexWait(this._ia, this._iaIdx+_SYN_WAITGEN, tag, timeout);
 	Atomics.sub(this._ia, this._iaIdx+_SYN_NUMWAIT, 1);
