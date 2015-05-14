@@ -2,44 +2,45 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// Data point:
+// Data points (Nightly, May 2015):
+//
 // - Shared-memory channels are about 5x faster than postMessage
-//   channels (210K msg/s vs 41K msg/s) when sending integers.
+//   channels (210K msg/s vs 41K msg/s) when sending just one integer
+//   back and forth.
 //
 // - Shared-memory channels increase the advantage to 6x when sending
 //   objects with an integer field (160K vs 25K).
 
-// At the same time, there are clearly some lost messages along the
-// way...  Things hang easily here.  This is not good.  With instrumentation
-// I see the master timing out on receive, a good place to start looking.
-
 var iterations = 100000;
+var bufSize = 8192;		// Should be divisible by 2 and "large enough"
+                                //  (8K is much more than needed for this test)
 
 var w = new Worker("test-sendmsg-worker.js");
-var sab = new SharedArrayBuffer(8192);
+var sab = new SharedArrayBuffer(bufSize);
 
-var s = new ChannelSender(sab, 0, 4096);
-var r = new ChannelReceiver(sab, 4096, 4096);
+// Setup our state first.
 
-// Do not kick off the worker until we're done constructing state.
-// The worker will send a message back when it too is ready.
+var s = new ChannelSender(sab, 0, bufSize/2);
+var r = new ChannelReceiver(sab, bufSize/2, bufSize/2);
+
+// Kick off the worker and wait for a message that it is ready.
 
 w.onmessage = workerReady;
-w.postMessage([sab, iterations], [sab]);
+w.postMessage([sab, iterations, 0, bufSize/2, bufSize/2, bufSize/2], [sab]);
 
 console.log("Master waiting");
 
 function workerReady(ev) {
+    var start = Date.now();
+
     var c = {item:0};
-    var start;
     for ( var i=0 ; i < iterations ; i++ ) {
 	s.send(c);
-	if (i == 0)
-	    start = Date.now();
 	c = r.receive();
     }
-    console.log("Should be " + iterations + ": " + c.item);
-    console.log(Math.round(1000 * (2*iterations) / (Date.now() - start)) + " messages/s");
-}
 
-function runTest() {}
+    var end = Date.now();
+
+    console.log("Should be " + iterations + ": " + c.item);
+    console.log(Math.round(1000 * (2*iterations) / (end - start)) + " messages/s");
+}

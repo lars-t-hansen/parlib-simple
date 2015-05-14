@@ -1,3 +1,7 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 importScripts("../src/arena.js",
 	      "../src/synchronic.js",
 	      "../src/marshaler.js",
@@ -6,10 +10,14 @@ importScripts("../src/arena.js",
 
 onmessage =
     function (ev) {
-	var [sab, iterations] = ev.data;
+	var [sab, iterations, recvIdx, recvLength, sendIdx, sendLength] = ev.data;
 
-	var r = new ChannelReceiver(sab, 0, 4096);
-	var s = new ChannelSender(sab, 4096, 4096);
+	// Initialize our state
+
+	var r = new ChannelReceiver(sab, recvIdx, recvLength);
+	var s = new ChannelSender(sab, sendIdx, sendLength);
+
+	// Let the master know we're ready to go
 
 	postMessage("ready");
 
@@ -20,5 +28,5 @@ onmessage =
 	    s.send(c);
 	}
 
-	console.log("worker exiting");
+	console.log("Worker exiting");
     };
