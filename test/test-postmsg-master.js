@@ -9,22 +9,29 @@ var w = new Worker("test-postmsg-worker.js");
 w.onmessage = workerReady;
 w.postMessage([iterations]);
 
-console.log("Master waiting");
-
 function workerReady(ev) {
-    console.log(ev.data);
-    var i = 0;
-    var start = Date.now();
-    w.onmessage = function (ev) {
-	var c = ev.data;
-	if (++i == iterations) {
-	    console.log("Should be " + iterations + ": " + c);
-	    console.log(Math.round(1000 * (2*iterations) / (Date.now() - start)) + " messages/s");
-	    return;
-	}
-	w.postMessage(c);
-    };
+    w.onmessage = processMsg;
+    document.getElementById("button").disabled = false;
+}
+
+var i;
+var start;
+
+function runTest() {
+    document.getElementById("button").disabled = true;
+    msg("Master waiting");
+    i = 0;
+    start = Date.now();
     w.postMessage({item:0});
 }
 
-function runTest() {}
+function processMsg(ev) {
+    var c = ev.data;
+    if (++i == iterations) {
+	msg("Should be " + iterations + ": " + c.item);
+	msg(Math.round(1000 * (2*iterations) / (Date.now() - start)) + " messages/s");
+	document.getElementById("button").disabled = false;
+	return;
+    }
+    w.postMessage(c);
+}

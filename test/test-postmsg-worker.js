@@ -2,14 +2,16 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-onmessage =
-    function (ev) {
-	var [iterations] = ev.data;
+onmessage = stage1;
 
-	onmessage = function (ev) {
-	    var c = ev.data;
-	    c.item++;
-	    postMessage(c);
-	};
-	postMessage("ready");
-    };
+function stage1(ev) {
+    var [iterations] = ev.data;
+    onmessage = stage2;
+    postMessage("ready");
+};
+
+function stage2(ev) {
+    var c = ev.data;
+    c.item++;
+    postMessage(c);
+}
