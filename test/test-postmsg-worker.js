@@ -5,7 +5,7 @@
 onmessage = stage1;
 
 function stage1(ev) {
-    var [iterations] = ev.data;
+    var iterations = ev.data[0];
     onmessage = stage2;
     postMessage("ready");
 };
