@@ -238,19 +238,25 @@ const _Synchronic_int_methods =
 	// influence the choice.  If the count is high without
 	// hindering an eventual drop into futexWait then it will just
 	// decrease performance.  If the count is low it is pointless.
-	// (This is why Synchronic really wants a native
-	// implementation.)
+	// (This is why Synchronic really wants a native implementation.)
 	//
-	// Data points from a 2.6GHz i7:
+	// Data points from a 2.6GHz i7 MacBook Pro:
 	//
 	// - the simple send-integer benchmark (test-sendint.html),
 	//   which is the very simplest case we can really imagine,
-	//   gets flaky timings with a count below 4000
+	//   gets noisy timings with an iteration count below 4000
+	//
 	// - the simple send-object benchmark (test-sendmsg.html)
 	//   gets a boost when the count is at least 10000
 	//
 	// 10000 is perhaps 5us (CPI=1, naive) and seems like a
-	// reasonable cutoff, for now.
+	// reasonable cutoff, for now - but note, it is reasonable FOR
+	// THIS SYSTEM ONLY, which is a big flaw.
+	//
+	// The better fix might well be to add some kind of spin/nanosleep
+	// functionality to futexWait, see https://bugzil.la/1134973.
+	// That functionality can be platform-dependent and even
+	// adaptive, with JIT support.
 	var i = 10000;
 	do {
 	    // May want this to be a relaxed load, though on x86 it won't matter.
@@ -264,6 +270,9 @@ const _Synchronic_int_methods =
 
     _notify: function () {
 	Atomics.add(this._ia, this._iaIdx+_SYN_WAITGEN, 1);
+	// Would it be appropriate & better to wake n waiters, where n
+	// is the number loaded in the load()?  I almost think so,
+	// since our futexes are fair.
 	if (Atomics.load(this._ia, this._iaIdx+_SYN_NUMWAIT) > 0)
 	    Atomics.futexWake(this._ia, this._iaIdx+_SYN_WAITGEN, Number.POSITIVE_INFINITY);
     },
@@ -414,6 +423,7 @@ const _Synchronic_float_methods =
     },
 
     _waitForUpdate: function (tag, timeout) {
+	// TODO: similar spin optimization as the integer case.
 	Atomics.add(this._ia, this._iaIdx+_SYN_NUMWAIT, 1);
 	Atomics.futexWait(this._ia, this._iaIdx+_SYN_WAITGEN, tag, timeout);
 	Atomics.sub(this._ia, this._iaIdx+_SYN_NUMWAIT, 1);
