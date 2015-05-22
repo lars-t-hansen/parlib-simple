@@ -13,16 +13,18 @@
 <body>
 <canvas id="mycanvas"></canvas>
 <div id="mystatus">&nbsp;</div>
+<!--
 <br>
 <div>
 <input type="radio" name="group1" id="asm_simd" onclick="setMode('asm_simd')">asm.js + simd (float32)</input> <br>
 <input type="radio" name="group1" id="asm" onclick="setMode('asm')">asm.js (float32)</input> <br>
 <input type="radio" name="group1" id="js" onclick="setMode('js')">plain js (float64)</input> <br>
 </div>
+-->
 <script>
 var mode = "asm_simd";
-document.getElementById(mode).checked = true;
-document.getElementById('mystatus').innerHTML = "Mode: " + mode;
+//document.getElementById(mode).checked = true;
+//document.getElementById('mystatus').innerHTML = "Mode: " + mode;
 </script>
 
 <script src="../../util/numWorkers.js"></script>

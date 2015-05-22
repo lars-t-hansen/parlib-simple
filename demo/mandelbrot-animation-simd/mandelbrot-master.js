@@ -6,8 +6,8 @@
 
 // Animation parameters
 
-const magFactor = 1.025;	// with 1.5 pixelation is a problem after a while, because of float32
-const maxIterations = 400;
+const magFactor = 1.05;	// with 1.5 pixelation is a problem after a while, because of float32
+const maxIterations = 100;
 
 // The memory contains two height*width grids (so that we can overlap
 // display and computation) and extra shared space for the Par
@@ -47,6 +47,8 @@ function setMode(new_mode) {
      	timeBefore = Date.now();
 }
 
+var stop = false;
+
 function showMandelbrot() {
     var doDisplay = true;
     var memnow = mem;
@@ -61,6 +63,7 @@ function showMandelbrot() {
     iterations++;
     fps_iterations++;
     if (iterations == maxIterations) {
+	stop = true;
 	going_in = !going_in;
 	iterations = 1;
     }
@@ -73,14 +76,14 @@ function showMandelbrot() {
     mem = (memnow == mem1) ? mem2 : mem1;
 
     // Overlap display of this frame with computation of the next.
-    doMandelbrot();
+    if (!stop)
+	doMandelbrot();
 
     if (now - lastDisplay >= 1000) {
 	lastDisplay = now;
 	var t = now - timeBefore;
 	var fps = Math.round((fps_iterations/(t/1000))*10)/10;
 	document.getElementById('mystatus').innerHTML =
-	    "Mode: " + mode + " " +
 	    "Number of workers: " + numWorkers + "  Compute time: " + t + "ms  FPS=" + fps;
     }
 

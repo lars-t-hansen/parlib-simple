@@ -16,7 +16,7 @@
 // Animation parameters
 
 const magFactor = 1.05;
-const maxIterations = 250;	// Set to 1 for a single frame
+const maxIterations = 100;	// Set to 1 for a single frame
 
 // The memory contains the height*width grid and extra shared space
 // for the barrier that is used to coordinate workers.

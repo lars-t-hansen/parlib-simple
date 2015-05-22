@@ -7,7 +7,7 @@
 // Animation parameters
 
 const magFactor = 1.05;
-const maxIterations = 250;
+const maxIterations = 100;
 
 // The memory contains two height*width grids (so that we can overlap
 // display and computation) and extra shared space for the Par
