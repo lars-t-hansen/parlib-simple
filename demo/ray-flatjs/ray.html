@@ -1,0 +1,27 @@
+<html>
+<body onload="main()">
+
+<div>
+<div id="mycaption">&nbsp;</div>
+<canvas id="mycanvas" width="800" height="600"></canvas>
+</div>
+
+<!-- "Par" subsystem -->
+<script src="../../src/asymmetric-barrier.js"></script>
+<script src="../../src/marshaler.js"></script>
+<script src="../../src/par.js"></script>
+
+<!-- FlatJS libraries.  https://github.com/lars-t-hansen/flatjs -->
+<script src="../../../flatjs/libflatjs.js"></script>
+
+<!-- Common code (types and parameters), compiled from FlatJS -->
+<script src="ray-common.js"></script>
+
+<!-- Number of workers, takes it from the URL "...?workers=n" if present, otherwise 4 -->
+<script src="../../util/numWorkers.js"></script>
+
+<!-- Master code (ray trace driver), compiled from FlatJS -->
+<script src="ray-master.js"></script>
+
+</html>
+</body>

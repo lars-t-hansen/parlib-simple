@@ -1,0 +1,244 @@
+/* -*- mode: javascript -*- */
+
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+ *
+ * Author: Lars T Hansen, lth@acm.org / lhansen@mozilla.com
+ */
+
+// CONFIGURATION
+
+const g_height = 600;
+const g_width = 800;
+
+const g_shadows = true;		// Compute object shadows
+const g_reflection = true;	// Compute object reflections
+const g_reflection_depth = 2;
+const g_antialias = false;	// Antialias the image (expensive but very pretty)
+
+const g_left = -2;
+const g_right = 2;
+const g_top = 1.5;
+const g_bottom = -1.5;
+
+// END CONFIGURATION
+
+const debug = false;		// Progress printout, may confuse the consumer
+
+const SENTINEL = 1e32;
+const EPS = 0.00001;
+
+function DL3(x, y, z) { return {x:x, y:y, z:z}; }
+
+function add(a, b) { return DL3(a.x+b.x, a.y+b.y, a.z+b.z); }
+function addi(a, c) { return DL3(a.x+c, a.y+c, a.z+c); }
+function sub(a, b) { return DL3(a.x-b.x, a.y-b.y, a.z-b.z); }
+function subi(a, c) { return DL3(a.x-c, a.y-c, a.z-c); }
+function muli(a, c) { return DL3(a.x*c, a.y*c, a.z*c); }
+function divi(a, c) { return DL3(a.x/c, a.y/c, a.z/c); }
+function neg(a) { return DL3(-a.x, -a.y, -a.z); }
+function length(a) { return Math.sqrt(a.x*a.x + a.y*a.y + a.z*a.z); }
+function normalize(a) { var d = length(a); return DL3(a.x/d, a.y/d, a.z/d); }
+function cross(a, b) { return DL3(a.y*b.z - a.z*b.y, a.z*b.x - a.x*b.z, a.x*b.y - a.y*b.x); }
+function dot(a, b) { return a.x*b.x + a.y*b.y + a.z*b.z; }
+
+@flatjs struct Vec3 {
+    x: float64
+    y: float64
+    z: float64
+
+    @get(SELF) {
+	return DL3(SELF.x, SELF.y, SELF.z);
+    }
+} @end
+
+// Avoid intermediate DL3 objects
+
+function subvref(a, b) { return DL3(a.x-Vec3.x(b), a.y-Vec3.y(b), a.z-Vec3.z(b)); }
+function subrefref(a, b) { return DL3(Vec3.x(a)-Vec3.x(b), Vec3.y(a)-Vec3.y(b), Vec3.z(a)-Vec3.z(b)); }
+function mulrefi(a, c) { return DL3(Vec3.x(a)*c, Vec3.y(a)*c, Vec3.z(a)*c); }
+
+@flatjs struct Material {
+    diffuse:   Vec3
+    specular:  Vec3
+    shininess: float64
+    ambient:   Vec3
+    mirror:    float64
+} @end
+
+function makeMaterial(diffuse, specular, shininess, ambient, mirror) {
+    var v = new Material;
+    v.diffuse = diffuse;
+    v.specular = specular;
+    v.shininess = shininess;
+    v.ambient = ambient;
+    v.mirror = mirror;
+    return v;
+}
+
+@flatjs class Surface {
+    material: Material
+
+    @method init(SELF, material) {
+	SELF.material = material;
+	return SELF;
+    }
+
+    @virtual intersect(SELF, eye, ray, min, max) {
+	throw "Pure: Surface.intersect"
+    }
+
+    @virtual normal(SELF, p) {
+	throw "Pure: Surface.normal"
+    }
+} @end
+
+@flatjs class Scene extends Surface {
+    length: int32
+    objects: Surface.Array
+
+    @method init(SELF, objects) {
+	var len = objects.length;
+	SELF.length = len;
+	var objs = @new Surface.Array(len);
+	for ( var i=0 ; i < len ; i++ )
+	    Surface.Array.setAt(objs, i, objects[i]);
+	SELF.objects = objs;
+	return SELF;
+    }
+
+    @virtual intersect(SELF, eye, ray, min, max) {
+	var min_obj = NULL;
+	var min_dist = SENTINEL;
+
+	var objs = SELF.objects;
+	for ( var idx=0, limit=SELF.length ; idx < limit ; idx++ ) {
+	    var surf = Surface.Array.at(objs, idx);
+	    var tmp = Surface.intersect(surf, eye, ray, min, max);
+	    var obj = tmp.obj;
+	    var dist = tmp.dist;
+	    if (obj)
+		if (dist >= min && dist < max)
+		    if (dist < min_dist) {
+			min_obj = obj;
+			min_dist = dist;
+		    }
+	}
+	return {obj:min_obj, dist:min_dist};
+    }
+
+} @end
+
+@flatjs class Sphere extends Surface {
+    center: Vec3
+    radius: float64
+
+    @method init(SELF, material, center, radius) {
+	Surface.init(SELF, material)
+	SELF.center = center;
+	SELF.radius = radius
+	return SELF;
+    }
+
+    @virtual intersect(SELF, eye, ray, min, max) {
+	var DdotD = dot(ray, ray);
+	var EminusC = subvref(eye, SELF.center.ref);
+	var B = dot(ray, EminusC);
+	var disc = B*B - DdotD*(dot(EminusC,EminusC) - SELF.radius*SELF.radius);
+	if (disc < 0.0)
+	    return {obj:NULL, dist:0};
+	var s1 = (-B + Math.sqrt(disc))/DdotD;
+	var s2 = (-B - Math.sqrt(disc))/DdotD;
+	// Here return the smallest of s1 and s2 after filtering for _min and _max
+	if (s1 < min || s1 > max)
+	    s1 = SENTINEL;
+	if (s2 < min || s2 > max)
+	    s2 = SENTINEL;
+	var _dist = Math.min(s1,s2);
+	if (_dist == SENTINEL)
+	    return {obj:NULL, dist:0};
+	return {obj:SELF, dist:_dist};
+    }
+
+    @virtual normal(SELF, p) {
+	return divi(subvref(p, SELF.center.ref), SELF.radius);
+    }
+} @end
+
+@flatjs class Triangle extends Surface {
+    v1: Vec3
+    v2: Vec3
+    v3: Vec3
+
+    @method init(SELF, material, v1, v2, v3) {
+	Surface.init(SELF, material)
+	SELF.v1 = v1;
+	SELF.v2 = v2;
+	SELF.v3 = v3;
+	return SELF;
+    }
+
+    @virtual intersect(SELF, eye, ray, min, max) {
+	// TODO: observe that values that do not depend on g, h, and i can be precomputed
+	// and stored with the triangle (for a given eye position), at some (possibly significant)
+	// space cost.  Notably the numerator of "t" is invariant, as are many factors of the
+	// numerator of "gamma".
+	var a = SELF.v1.x - SELF.v2.x;
+	var b = SELF.v1.y - SELF.v2.y;
+	var c = SELF.v1.z - SELF.v2.z;
+	var d = SELF.v1.x - SELF.v3.x;
+	var e = SELF.v1.y - SELF.v3.y;
+	var f = SELF.v1.z - SELF.v3.z;
+	var g = ray.x;
+	var h = ray.y;
+	var i = ray.z;
+	var j = SELF.v1.x - eye.x;
+	var k = SELF.v1.y - eye.y;
+	var l = SELF.v1.z - eye.z;
+	var M = a*(e*i - h*f) + b*(g*f - d*i) + c*(d*h - e*g);
+	var t = -((f*(a*k - j*b) + e*(j*c - a*l) + d*(b*l - k*c))/M);
+	if (t < min || t > max)
+	    return {obj:NULL,dist:0};
+	var gamma = (i*(a*k - j*b) + h*(j*c - a*l) + g*(b*l - k*c))/M;
+	if (gamma < 0 || gamma > 1.0)
+	    return {obj:NULL,dist:0};
+	var beta = (j*(e*i - h*f) + k*(g*f - d*i) + l*(d*h - e*g))/M;
+	if (beta < 0.0 || beta > 1.0 - gamma)
+	    return {obj:NULL,dist:0};
+	return {obj:SELF, dist:t};
+    }
+
+    @virtual normal(SELF, p) {
+	// TODO: Observe that the normal is invariant and can be stored with the triangle
+	return normalize(cross(subrefref(SELF.v2.ref, SELF.v1.ref), subrefref(SELF.v3.ref, SELF.v1.ref)));
+    }
+
+} @end
+
+@flatjs class Bitmap {
+    data: int32.Array
+    height: int32
+    width: int32
+
+    @method init(SELF, height, width, color) {
+	SELF.height = height;
+	SELF.width = width;
+	var data = @new int32.Array(height*width);
+	var c = (255<<24)|((255*color.z)<<16)|((255*color.y)<<8)|(255*color.x)
+	for ( var i=0, l=width*height ; i < l ; i++ )
+	    int32.Array.setAt(data, i, c);
+	SELF.data = data;
+	return SELF;
+    }
+
+    // For debugging only
+    @method ref(SELF, y, x) {
+	return int32.Array.at(SELF.data, (SELF.height-y)*SELF.width+x);
+    }
+
+    // Not a hot function
+    @method setColor(SELF, y, x, v) {
+	int32.Array.setAt(SELF.data, (SELF.height-y-1)*SELF.width+x, (255<<24)|((255*v.z)<<16)|((255*v.y)<<8)|(255*v.x));
+    }
+} @end
