@@ -22,7 +22,7 @@
 
 function main() {
     const RAW_MEMORY = new SharedArrayBuffer(g_height*g_width*int32.SIZE + 65536);
-    FlatJS.init(RAW_MEMORY, true);
+    FlatJS.init(RAW_MEMORY, 0, RAW_MEMORY.byteLength, true);
 
     // Input: the scene graph, in shared memory
     const [eye, light, background, world] = setStage();

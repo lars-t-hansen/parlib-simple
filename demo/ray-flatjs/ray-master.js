@@ -15,15 +15,15 @@
  * This is written in FlatJS (github.com/lars-t-hansen/flatjs),
  * holding the scene graph in flat shared memory and rendering in
  * parallel into a flat shared array.  The computation is otherwise
- * straight JS.
+ * straight JS and exactly the same as the sequential program.
  *
  * Parameters and FlatJS types that are shared with the worker are in
- * ray-common.flat_js.
+ * ray-common.flat_js.  Computation is in ray-worker.flat_js.
  */
 
 function main() {
     const RAW_MEMORY = new SharedArrayBuffer(g_height*g_width*int32.SIZE + 65536);
-    FlatJS.init(RAW_MEMORY, true);
+    FlatJS.init(RAW_MEMORY, 0, RAW_MEMORY.byteLength, true);
 
     // Input: the scene graph, in shared memory
     const [eye, light, background, world] = setStage();

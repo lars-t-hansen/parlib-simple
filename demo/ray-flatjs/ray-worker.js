@@ -21,7 +21,7 @@ onmessage = function (ev) {
 }
 
 function setup(RAW_MEMORY) {
-    FlatJS.init(RAW_MEMORY, false);
+    FlatJS.init(RAW_MEMORY, 0, RAW_MEMORY.byteLength, false);
 }
 
 var g_eye;
