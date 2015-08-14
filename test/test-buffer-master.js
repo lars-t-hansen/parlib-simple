@@ -28,6 +28,10 @@ Buffer.initialize(iab, bufferIdx);
 function runTest() {
     q = new Buffer(iab, bufferIdx, iab, qIdx, qSize);
 
+    // Create numWorkers workers, share the memory with them, and wait
+    // for them all to report back that they're running.  Once they're
+    // all up, call consumer().
+
     var readies = 0;
     for ( var id=0 ; id < numWorkers ; id++ ) {
         var w = new Worker("test-buffer-worker.js");
@@ -48,6 +52,8 @@ function runTest() {
 function consumer() {
     msg("running: master");
 
+    // Consume data and account for the received values in a local buffer.
+
     var consumed = 0;
     var check = new Int32Array(numWorkers*numElem);
     while (consumed < numWorkers*numElem) {
@@ -55,6 +61,9 @@ function consumer() {
         check[elt]++;
         ++consumed;
     }
+
+    // Check that we received one of each value.
+
     msg("Checking " + numWorkers*numElem + " elements");
     for ( var i=0 ; i < numWorkers*numElem ; i++ )
         if (check[i] != 1)

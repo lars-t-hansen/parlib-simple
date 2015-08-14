@@ -142,10 +142,11 @@ function mandelbrot_asm_simd_module(glob, ffi, heap) {
     var b8 = new glob.SharedUint8Array(heap);
     var imul = glob.Math.imul;
     var toF = glob.Math.fround;
-    var i4 = glob.SIMD.int32x4;
-    var f4 = glob.SIMD.float32x4;
+    var i4 = glob.SIMD.Int32x4;
+    var f4 = glob.SIMD.Float32x4;
     var i4add = i4.add;
     var i4and = i4.and;
+    var i4lane = i4.extractLane;
     var f4add = f4.add;
     var f4sub = f4.sub;
     var f4mul = f4.mul;
@@ -230,19 +231,19 @@ function mandelbrot_asm_simd_module(glob, ffi, heap) {
 		}
 
 		loc = imul(imul(Py|0, width|0) + Px|0 + 0, 4);
-		it = count4.x;
+		it = i4lane(count4,0);
 		i32[(membase+loc)>>2] = (it|0) == (MAXIT|0) ? 0xFF000000|0 : i32[(colbase+((it&7)<<2))>>2]|0;
 
 		loc = imul(imul(Py|0, width|0) + Px|0 + 1, 4);
-		it = count4.y;
+		it = i4lane(count4,1);
 		i32[(membase+loc)>>2] = (it|0) == (MAXIT|0) ? 0xFF000000|0 : i32[(colbase+((it&7)<<2))>>2]|0;
 
 		loc = imul(imul(Py|0, width|0) + Px|0 + 2, 4);
-		it = count4.z;
+		it = i4lane(count4,2);
 		i32[(membase+loc)>>2] = (it|0) == (MAXIT|0) ? 0xFF000000|0 : i32[(colbase+((it&7)<<2))>>2]|0;
 
 		loc = imul(imul(Py|0, width|0) + Px|0 + 3, 4);
-		it = count4.w;
+		it = i4lane(count4,3);
 		i32[(membase+loc)>>2] = (it|0) == (MAXIT|0) ? 0xFF000000|0 : i32[(colbase+((it&7)<<2))>>2]|0;
 	    }
 	}

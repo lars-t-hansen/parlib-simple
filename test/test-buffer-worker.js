@@ -15,7 +15,11 @@ onmessage =
         var iab = new SharedInt32Array(sab);
         var q = new Buffer(iab, bufferIdx, iab, qIdx, qSize);
 
+	// Report back that we're running.
+
         postMessage("ready " + myID);
+
+	// Produce elements and insert them into the queue.
 
         var produced = 0;
         while (produced < numElem) {
