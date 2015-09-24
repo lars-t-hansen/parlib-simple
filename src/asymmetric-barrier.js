@@ -128,6 +128,7 @@ MasterBarrier.prototype.release =
 	Atomics.store(iab, counterLoc, numWorkers);
 	Atomics.add(iab, seqLoc, 1);
 	Atomics.futexWake(iab, seqLoc, numWorkers);
+	Atomics.add(iab, seqLoc, 1);
 	return true;
     };
 
@@ -145,8 +146,8 @@ function WorkerBarrier(iab, ibase, ID) {
     this.ID = ID;
 }
 
-// Enter the barrier.  This call will block until the master releases
-// the workers.
+// Enter the barrier.  This call will block until the master has
+// released all the workers.
 
 WorkerBarrier.prototype.enter =
     function () {
@@ -159,6 +160,6 @@ WorkerBarrier.prototype.enter =
 	if (Atomics.sub(iab, counterLoc, 1) == 1)
 	    postMessage(["MasterBarrier.dispatch", ID]);
 	Atomics.futexWait(iab, seqLoc, seq, Number.POSITIVE_INFINITY);
+	while (Atomics.load(iab, seqLoc) & 1)
+	    ;
     };
-
-

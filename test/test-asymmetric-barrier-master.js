@@ -13,7 +13,7 @@
 // just races ahead is unlikely to compute the correct result.
 
 const numWorkers = 3;
-const segmentSize = 10;
+const segmentSize = 1000;
 const bufSize = segmentSize*numWorkers;
 const barrierID = 1337;
 const numIter = 3;
