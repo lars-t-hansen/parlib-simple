@@ -20,7 +20,7 @@
 
 var numWorkers = 3;
 var numSegments = numWorkers + 1;
-var segmentSize = 10;
+var segmentSize = 1000;
 var bufIdx = 0;
 var bufSize = segmentSize*numSegments;
 var barrierIdx = bufIdx+bufSize;

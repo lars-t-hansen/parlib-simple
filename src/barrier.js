@@ -87,15 +87,14 @@ Barrier.prototype.enter =
 	if (Atomics.sub(iab, counterLoc, 1) == 1) {
 	    const numAgents = iab[numAgentsLoc];
 	    iab[counterLoc] = numAgents;
-	    iab[seqLoc] = seq+1;
-	    // The correctness of the wakeup call depends on the
-	    // linear-queue behavior of wait and wake: we wake the
-	    // numAgents-1 that are currently waiting, even if some
-	    // agents might reenter the barrier and start waiting
-	    // again before the waking is finished.
+	    Atomics.add(iab, seqLoc, 1);
 	    Atomics.futexWake(iab, seqLoc, numAgents-1);
+	    Atomics.add(iab, seqLoc, 1);
 	}
 	else {
 	    Atomics.futexWait(iab, seqLoc, seq, Number.POSITIVE_INFINITY);
+	    // Wait until the master is done waking all threads
+	    while (Atomics.load(iab, seqLoc) & 1)
+		;
 	}
     };
