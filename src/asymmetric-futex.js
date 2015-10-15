@@ -2,29 +2,32 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// An asymmetric master/worker futex mechanism.
+// Proof of concept: A simple asymmetric master/worker futex mechanism.
 //
 // In the master, create a MasterFutex for each shared array that
 // we'll wait on.  In each worker, create corresponding WorkerFutexes.
 //
-// In the master's message event handler (for each worker), be sure to
+// In the master's message event handler for each worker, be sure to
 // call MasterFutex.dispatch as described below.
 //
 // The master can now provide nonblocking wait for signals from the
 // workers.  There can be multiple pending waits and several waits can
 // wait on the same location.
+//
+// See ../test/test-asymmetric-futex.html for example code.
 
 "use strict";
 
-// Constraints:
+// Desiderata / Facts of life:
 //
 //  - There can be multiple outstanding waits in the master, because
-//    the master multiplexes many threads of control
+//    the master effectively multiplexes many threads of control
 //  - Many of these waits can wait on the same location, but they can
 //    also all wait on different locations
-//  - There is only one master (everyone else should use futexWait)
-//  - The workers need to use a dedicated wakeup to wake the master,
-//    it is not integrated with futexWake
+//  - There is only one master, normally the main thread.  Everyone else,
+//    normally the workers, should use futexWait for waiting
+//  - The workers can use a dedicated wakeup to wake the master,
+//    it need not be integrated with the normal futexWake
 //  - It is useful if the wait mechanism is like futexWait, in that
 //    it takes an expected value for an int32 cell
 //
@@ -33,6 +36,7 @@
 //  - Each "cell" is two consecutive int32 locations, the first holds
 //    the value and the second is a private coordination word which
 //    must initially be zero
+//  - The value location must only be accessed with atomic operations
 //  - For each location - an (array,index) pair - the master keeps
 //    track of callbacks to be invoked for a wakeup
 //  - The coordination word consists of a count field and some flag
@@ -45,7 +49,9 @@ const _WW_LOCK = 1;		// Lock flag
 // Unused: 4
 const _WW_MASK = 7;		// Mask bits for flags
 const _WW_SHFT = 3;		// Shift to get count of waiters
-const _WW_MAX = 0x0FFFFFFF; // Max count value
+const _WW_MAX = 0x0FFFFFFF;     // Max count value
+
+// Shared base class
 
 function _MasterWorkerFutex() {}
 
@@ -72,7 +78,7 @@ _MasterWorkerFutex.prototype._signal = function (loc, count) {
 // an array starting at the same byte in shared memory and the same
 // id.
 //
-// This constructor must return before the corresponding
+// This constructor must return before a corresponding
 // WorkerFutex.wake() is called in any worker.
 
 function MasterFutex(i32a, id) {
@@ -104,14 +110,6 @@ MasterFutex.dispatch = function (ev) {
     return true;
 }
 
-MasterFutex.prototype._wakeup = function (loc, count) {
-    var cb = this._callbacks[loc];
-    if (!cb)
-	return;
-    while (cb.length && count-- > 0)
-	(cb.shift())(Atomics.OK);
-}
-
 // Call wait() to wait on loc with callback cb if i32a[loc]==expected.
 // Returns Atomics.OK if it is waiting, Atomics.NOTEQUAL if the values
 // are unequal.
@@ -119,7 +117,7 @@ MasterFutex.prototype._wakeup = function (loc, count) {
 MasterFutex.prototype.wait = function (loc, expected, cb) {
     var r = Atomics.NOTEQUAL;
     var a = this._lock(loc);
-    if (this._i32a[loc] == expected) {
+    if (Atomics.load(this._i32a, loc) == expected) {
 	r = Atomics.OK;
 	this._callbacks[loc] = this._callbacks[loc] || [];
 	this._callbacks[loc].push(cb);
@@ -129,6 +127,16 @@ MasterFutex.prototype.wait = function (loc, expected, cb) {
     this._unlock(loc, a);
     return r;
 };
+
+// Private
+
+MasterFutex.prototype._wakeup = function (loc, count) {
+    var cb = this._callbacks[loc];
+    if (!cb)
+	return;
+    while (cb.length && count-- > 0)
+	(cb.shift())(Atomics.OK);
+}
 
 // Create a WorkerFutex to be used in the worker.  The arguments are
 // as for MasterFutex, above.
@@ -178,7 +186,7 @@ WorkerFutex.prototype.wake = function (loc, count) {
 // count of waiters should not be decremented; if it is outside the
 // range the count must be decremented, and the item could even be
 // removed.  The count of in-transit wakeups is decremented only by
-// the dispatch code.)
+// the dispatch code.  But - is there room for races here?)
 //
 // Can further optimize the in-band signal by spinning or
 // micro-waiting on the "expected" value to be set.  This is more
