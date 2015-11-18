@@ -126,7 +126,7 @@ MasterFutex.prototype.wait = function (loc, expected, cb) {
     }
     this._unlock(loc, a);
     return r;
-};
+}
 
 // Private
 
@@ -151,12 +151,26 @@ WorkerFutex.prototype = new _MasterWorkerFutex();
 // Call wake() to send a wakeup signal to the master on loc.  count
 // defaults to "all current waiters".
 
+// Note, for this to be fair the workers and the master threads must
+// all be in the same queue somehow.  And even if it is not fair it
+// must not starve anyone, so it must at least unblock some from each
+// set.  And that may require state, or randomness (amounts to the
+// same thing), consider waking 1 every time, we can't always take
+// from the same set.
+
 WorkerFutex.prototype.wake = function (loc, count) {
     var a = this._lock(loc);
     var num = Math.min(a >> _WW_SHFT, count === undefined ? _WW_MAX : (count|0));
     if (num > 0)
 	this._signal(loc, num);
     this._unlock(loc, a - (num << _WW_SHFT));
+}
+
+WorkerFutex.prototype.wait = function (loc, expected) {
+    Atomics.add(this._i32a, loc+1, 1);			  // Bitfield?
+    var r = Atomics.futexWait(this._i32a, loc, expected); // Likely wrong
+    Atomics.sub(this._i32a, loc+1, 1)			  // Bitfield?
+    return r;
 }
 
 // TODO:

@@ -84,6 +84,11 @@
  * The methods that store values in the object will send notifications
  * as appropriate, there is rarely a need to call notify().
  *
+ * The waiting methods may fail to observe a change that would cause a
+ * wakeup if a subsequent change makes the wakeup condition false
+ * again.  It's unclear if this is a reasonable design (it follows the
+ * C++ design).  See the implementation for more information.
+ *
  * Synchronization:
  *
  * - The methods that load are: loadWhenEqual(), loadWhenNotEqual(),
@@ -187,6 +192,37 @@ const _Synchronic_int_methods =
 	return v;
     },
 
+    // There is a problem with loadWhenNotEqual, loadWhenEqual, and
+    // expectUpdate: a rapid A -> B -> C transition might not be
+    // observed, so even if the transition to B should have caused the
+    // wait to end, it might not because C does not cause the wait to
+    // end.  (C == A is probably typical.)  The wakeup will always
+    // happen because that's not value-dependent, but the waiting
+    // thread may not see the value the wakeup happened with and may
+    // decide to wait again.
+    //
+    // One way to fix this would probably be for the notification side
+    // to test against the expected value.  But that would require
+    // testing against one value per waiter.
+    //
+    // Another way to fix it is to push the responsibility over on the
+    // caller, and make the caller do the loop.  The caller will have
+    // the same problem though.
+    //
+    // A third way is for the notification side to store the value
+    // that caused the wakeup in each woken-up thread, somehow.  In
+    // this scenario, a waiter chains a location onto a list of
+    // locations linked from the synchronic.  Each waiter reads the
+    // value from that location and uses that to break the loop.  This
+    // requires only one shared location per thread, since a thread
+    // can only wait on one synchronic at a time.  (For asymmetric or
+    // nonblocking synchronics on the main thread we need one location
+    // per multiplexed "thread" ie per waiter.)
+    //
+    // The sample code for the C++ synchronic proposal does none of
+    // those: it does what we do here, a best effort to observe an
+    // updated value.
+
     loadWhenNotEqual: function (value_) {
 	var value = this._coerce(value_);
 	for (;;) {
@@ -209,6 +245,18 @@ const _Synchronic_int_methods =
 	    this._waitForUpdate(tag, Number.POSITIVE_INFINITY);
 	}
 	return v;
+    },
+
+    callWhenEqual: function _f (value_, cb) {
+	var value = this._coerce(value_);
+	var tag = Atomics.load(this._ia, this._iaIdx+_SYN_WAITGEN);
+	var v = Atomics.load(this._ta, this._taIdx) ;
+	if (v === value) {
+	    cb();
+	    return true;
+	}
+	this._callWhenUpdated(tag, Number.POSITIVE_INFINITY, _f.bind(this, value, cb));
+	return false;
     },
 
     expectUpdate: function (value_, timeout_) {
@@ -266,6 +314,49 @@ const _Synchronic_int_methods =
 	Atomics.add(this._ia, this._iaIdx+_SYN_NUMWAIT, 1);
 	Atomics.futexWait(this._ia, this._iaIdx+_SYN_WAITGEN, tag, timeout);
 	Atomics.sub(this._ia, this._iaIdx+_SYN_NUMWAIT, 1);
+    },
+
+    _callWhenUpdated: function (tag, timeout, cb) {
+	Atomics.add(this._ia, this._iaIdx+_SYN_NUMWAIT, 1);
+	// The logic here is that the dispatcher will call cb if ia[idx] != tag,
+	// or if the timeout has expired.
+	//
+	// We could do a short-wait here too, and invoke cb immediately if the
+	// value changes during the wait.
+	this._addCallback(this._ia,
+			  this._iaIdx+_SYN_NUMWAIT,
+			  tag,
+			  timeout,
+			  () => { Atomics.sub(this._ia, this._iaIdx+_SYN_NUMWAIT, 1);
+				  cb();
+				});
+    },
+
+    _addCallback: function (ia, idx, tag, timeout, cb) {
+	// The normal case will be that there are few waiters.  Ergo
+	// we can afford to check them all any time any wait signal
+	// comes in.  Early wakeups are also benign, apart from
+	// performance.
+
+	// _smallestTimeout must really be global, at least shared
+	// among all synchronics of all types.
+
+	if (timeout < _smallestTimeout) {
+	    // Setup new timeout.  Timeout just invokes the dispatch mechanism to
+	    // run the checking loop.
+	    //
+	    // Can afford to recompute timeout from all waiters here.
+	}
+
+	// do whatever
+
+	// finally check, since a wakeup may have been lost:
+	if (Atomics.load(ia, idx) != tag) {
+	    // oh well
+	    // deregister
+	    // call cb
+	    // recompute timeout?
+	}
     },
 
     _notify: function () {
