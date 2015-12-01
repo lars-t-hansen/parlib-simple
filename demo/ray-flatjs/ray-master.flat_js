@@ -27,6 +27,11 @@ function main() {
     // Input: the scene graph, in shared memory
     const [eye, light, background, world] = setStage();
 
+    var s = "";
+    Surface.debug(world, function (x) { s += x });
+    console.log(s);
+    return;
+
     // Output: the bitmap, in shared memory
     const bits = Bitmap.init(@new Bitmap, g_height, g_width, DL3(152.0/256.0, 251.0/256.0, 152.0/256.0));
 
@@ -118,5 +123,64 @@ function setStage() {
     if (debug)
 	console.log("Setstage end");
 
-    return [eye, light, background, Scene.init(@new Scene, world)];
+    // Create bounding volume hierarchy here, and use that for the Scene.  Scene goes away, I think.
+
+    //return [eye, light, background, Scene.init(@new Scene, world)];
+    return [eye, light, background, partition(world, computeBounds(world), 0)];
 }
+
+function partition(surfaces, bounds, axis) {
+    var left=null, right=null;
+    var { xmin, xmax, ymin, ymax, zmin, zmax } = bounds;
+    if (surfaces.length == 1) {
+	left = surfaces[0];
+	right = null;
+    }
+    else if (surfaces.length == 2) {
+	left = surfaces[0];
+	right = surfaces[1];
+    }
+    else {
+	var mid = 0;
+	var center;
+	if (axis == 0) {
+	    mid = (xmax - xmin) / 2;
+	    center = (s) => Surface.center(s).x
+	}
+	else if (axis == 1) {
+	    mid = (ymax - ymin) / 2;
+	    center = (s) => Surface.center(s).y
+	}
+	else {
+	    mid = (zmax - zmin) / 2;
+	    center = (s) => Surface.center(s).z
+	}
+	var lobj = [];
+	var robj = [];
+	for ( var i=0 ; i < surfaces.length ; i++ ) {
+	    if (center(surfaces[i]) <= mid)
+		lobj.push(surfaces[i]);
+	    else
+		robj.push(surfaces[i]);
+	}
+	axis = (axis + 1) % 3;
+	if (robj.length && !lobj.length) {
+	    lobj = robj;
+	    robj = [];
+	}
+	left = partition(lobj, computeBounds(lobj), axis);
+	right = robj.length ? partition(robj, computeBounds(robj), axis) : null;
+    }
+    return Volume.init(@new Volume, xmin, xmax, ymin, ymax, zmin, zmax, left, right);
+}
+
+function computeBounds(surfaces) {
+    var bounds = surfaces.map((s) => Surface.bounds(s));
+    return { xmin: Math.min.apply(null, bounds.map((b) => b.xmin)),
+	     xmax: Math.max.apply(null, bounds.map((b) => b.xmax)),
+	     ymin: Math.min.apply(null, bounds.map((b) => b.ymin)),
+	     ymax: Math.max.apply(null, bounds.map((b) => b.ymax)),
+	     zmin: Math.min.apply(null, bounds.map((b) => b.zmin)),
+	     zmax: Math.max.apply(null, bounds.map((b) => b.zmax)) };
+}
+

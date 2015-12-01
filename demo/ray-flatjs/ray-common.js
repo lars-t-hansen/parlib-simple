@@ -111,10 +111,20 @@ Surface.intersect_impl = function (SELF, eye, ray, min, max) {
 Surface.normal_impl = function (SELF, p) {
 	throw "Pure: Surface.normal"
     }
+Surface.bounds_impl = function (SELF) {
+	throw "Pure: Surface.bounds"
+    }
+Surface.center_impl = function (SELF) {
+	throw "Pure: Surface.center"
+    }
+Surface.debug_impl = function (SELF, print) {
+    }
 Surface.intersect = function (SELF , eye,ray,min,max) {
   switch (_mem_int32[SELF>>2]) {
     case 12421246:
       return Surface.intersect_impl(SELF , eye,ray,min,max);
+    case 255294398:
+      return Volume.intersect_impl(SELF , eye,ray,min,max);
     case 31908292:
       return Scene.intersect_impl(SELF , eye,ray,min,max);
     case 255127510:
@@ -128,6 +138,7 @@ Surface.intersect = function (SELF , eye,ray,min,max) {
 Surface.normal = function (SELF , p) {
   switch (_mem_int32[SELF>>2]) {
     case 12421246:
+    case 255294398:
     case 31908292:
       return Surface.normal_impl(SELF , p);
     case 255127510:
@@ -138,8 +149,139 @@ Surface.normal = function (SELF , p) {
       throw FlatJS._badType(SELF);
   }
 }
+Surface.bounds = function (SELF ) {
+  switch (_mem_int32[SELF>>2]) {
+    case 12421246:
+    case 31908292:
+      return Surface.bounds_impl(SELF );
+    case 255294398:
+      return Volume.bounds_impl(SELF );
+    case 255127510:
+      return Sphere.bounds_impl(SELF );
+    case 217195274:
+      return Triangle.bounds_impl(SELF );
+    default:
+      throw FlatJS._badType(SELF);
+  }
+}
+Surface.center = function (SELF ) {
+  switch (_mem_int32[SELF>>2]) {
+    case 12421246:
+    case 255294398:
+    case 31908292:
+      return Surface.center_impl(SELF );
+    case 255127510:
+      return Sphere.center_impl(SELF );
+    case 217195274:
+      return Triangle.center_impl(SELF );
+    default:
+      throw FlatJS._badType(SELF);
+  }
+}
+Surface.debug = function (SELF , print) {
+  switch (_mem_int32[SELF>>2]) {
+    case 12421246:
+    case 31908292:
+      return Surface.debug_impl(SELF , print);
+    case 255294398:
+      return Volume.debug_impl(SELF , print);
+    case 255127510:
+      return Sphere.debug_impl(SELF , print);
+    case 217195274:
+      return Triangle.debug_impl(SELF , print);
+    default:
+      throw FlatJS._badType(SELF);
+  }
+}
 Surface.initInstance = function(SELF) { _mem_int32[SELF>>2]=12421246; return SELF; }
 FlatJS._idToType[12421246] = Surface;
+
+function Volume(p) { this._pointer = (p|0); }
+Volume.prototype = new Surface;
+Volume.NAME = "Volume";
+Volume.SIZE = 152;
+Volume.ALIGN = 8;
+Volume.CLSID = 255294398;
+Object.defineProperty(Volume, 'BASE', {get: function () { return Surface; }});
+Volume.init = function (SELF, xmin, xmax, ymin, ymax, zmin, zmax, left, right) {
+	 _mem_float64[(SELF + 96) >> 3] = xmin; 
+	 _mem_float64[(SELF + 104) >> 3] = xmax; 
+	 _mem_float64[(SELF + 112) >> 3] = ymin; 
+	 _mem_float64[(SELF + 120) >> 3] = ymax; 
+	 _mem_float64[(SELF + 128) >> 3] = zmin; 
+	 _mem_float64[(SELF + 136) >> 3] = zmax; 
+	 _mem_int32[(SELF + 144) >> 2] = left; 
+	 _mem_int32[(SELF + 148) >> 2] = right; 
+	return SELF;
+    }
+Volume.intersect_impl = function (SELF, eye, ray, min, max) {
+	// FIXME
+	var intersects = 0;
+	if (intersects) {
+	    var r1 = Surface.intersect(_mem_int32[(SELF + 144) >> 2], eye, ray, min, max);
+	    if (_mem_int32[(SELF + 148) >> 2]) {
+		var r2 = Surface.intersect(_mem_int32[(SELF + 148) >> 2], eye, ray, min, max);
+		if (r2.dist < r1.dist)
+		    return r2;
+	    }
+	    return r1;
+	}
+	return {obj:NULL, dist:SENTINEL};
+    }
+Volume.bounds_impl = function (SELF) {
+	return { xmin: _mem_float64[(SELF + 96) >> 3], xmax: _mem_float64[(SELF + 104) >> 3],
+		 ymin: _mem_float64[(SELF + 112) >> 3], ymax: _mem_float64[(SELF + 120) >> 3],
+		 zmin: _mem_float64[(SELF + 128) >> 3], zmax: _mem_float64[(SELF + 136) >> 3] };
+    }
+Volume.debug_impl = function (SELF, print) {
+	print("[");
+	Surface.debug(_mem_int32[(SELF + 144) >> 2]);
+	if (_mem_int32[(SELF + 148) >> 2]) {
+	    print(",");
+	    Surface.debug(_mem_int32[(SELF + 148) >> 2]);
+	}
+	print("]");
+    }
+Volume.intersect = function (SELF , eye,ray,min,max) {
+  switch (_mem_int32[SELF>>2]) {
+    case 255294398:
+      return Volume.intersect_impl(SELF , eye,ray,min,max);
+    default:
+      throw FlatJS._badType(SELF);
+  }
+}
+Volume.bounds = function (SELF ) {
+  switch (_mem_int32[SELF>>2]) {
+    case 255294398:
+      return Volume.bounds_impl(SELF );
+    default:
+      throw FlatJS._badType(SELF);
+  }
+}
+Volume.debug = function (SELF , print) {
+  switch (_mem_int32[SELF>>2]) {
+    case 255294398:
+      return Volume.debug_impl(SELF , print);
+    default:
+      throw FlatJS._badType(SELF);
+  }
+}
+Volume.normal = function (SELF , p) {
+  switch (_mem_int32[SELF>>2]) {
+    default:
+      return Surface.normal_impl(SELF , p);
+  }
+}
+Volume.center = function (SELF ) {
+  switch (_mem_int32[SELF>>2]) {
+    default:
+      return Surface.center_impl(SELF );
+  }
+}
+Volume.initInstance = function(SELF) { _mem_int32[SELF>>2]=255294398; return SELF; }
+FlatJS._idToType[255294398] = Volume;
+
+// Scene goes away, I think.
 
 function Scene(p) { this._pointer = (p|0); }
 Scene.prototype = new Surface;
@@ -167,12 +309,14 @@ Scene.intersect_impl = function (SELF, eye, ray, min, max) {
 	    var tmp = Surface.intersect(surf, eye, ray, min, max);
 	    var obj = tmp.obj;
 	    var dist = tmp.dist;
-	    if (obj)
-		if (dist >= min && dist < max)
+	    if (obj) {
+		if (dist >= min && dist < max) {
 		    if (dist < min_dist) {
 			min_obj = obj;
 			min_dist = dist;
 		    }
+		}
+	    }
 	}
 	return {obj:min_obj, dist:min_dist};
     }
@@ -190,6 +334,24 @@ Scene.normal = function (SELF , p) {
       return Surface.normal_impl(SELF , p);
   }
 }
+Scene.bounds = function (SELF ) {
+  switch (_mem_int32[SELF>>2]) {
+    default:
+      return Surface.bounds_impl(SELF );
+  }
+}
+Scene.center = function (SELF ) {
+  switch (_mem_int32[SELF>>2]) {
+    default:
+      return Surface.center_impl(SELF );
+  }
+}
+Scene.debug = function (SELF , print) {
+  switch (_mem_int32[SELF>>2]) {
+    default:
+      return Surface.debug_impl(SELF , print);
+  }
+}
 Scene.initInstance = function(SELF) { _mem_int32[SELF>>2]=31908292; return SELF; }
 FlatJS._idToType[31908292] = Scene;
 
@@ -200,9 +362,9 @@ Sphere.SIZE = 128;
 Sphere.ALIGN = 8;
 Sphere.CLSID = 255127510;
 Object.defineProperty(Sphere, 'BASE', {get: function () { return Surface; }});
-Sphere.init = function (SELF, material, center, radius) {
+Sphere.init = function (SELF, material, center0, radius) {
 	Surface.init(SELF, material)
-	 Vec3._set_impl((SELF + 96), center); 
+	 Vec3._set_impl((SELF + 96), center0); 
 	 _mem_float64[(SELF + 120) >> 3] = radius 
 	return SELF;
     }
@@ -228,6 +390,17 @@ Sphere.intersect_impl = function (SELF, eye, ray, min, max) {
 Sphere.normal_impl = function (SELF, p) {
 	return divi(subvref(p, (SELF + 96)), _mem_float64[(SELF + 120) >> 3]);
     }
+Sphere.bounds_impl = function (SELF) {
+	return {xmin: _mem_float64[(SELF + 96) >> 3] - _mem_float64[(SELF + 120) >> 3], xmax: _mem_float64[(SELF + 96) >> 3] + _mem_float64[(SELF + 120) >> 3],
+		ymin: _mem_float64[(SELF + 104) >> 3] - _mem_float64[(SELF + 120) >> 3], ymax: _mem_float64[(SELF + 104) >> 3] + _mem_float64[(SELF + 120) >> 3],
+		zmin: _mem_float64[(SELF + 112) >> 3] - _mem_float64[(SELF + 120) >> 3], zmax: _mem_float64[(SELF + 112) >> 3] + _mem_float64[(SELF + 120) >> 3]};
+    }
+Sphere.center_impl = function (SELF) {
+	return Vec3._get_impl((SELF + 96));
+    }
+Sphere.debug_impl = function (SELF, print) {
+	print("(S c=" + Vec3._get_impl((SELF + 96)) + " r=" + _mem_float64[(SELF + 120) >> 3] + ")");
+    }
 Sphere.intersect = function (SELF , eye,ray,min,max) {
   switch (_mem_int32[SELF>>2]) {
     case 255127510:
@@ -240,6 +413,30 @@ Sphere.normal = function (SELF , p) {
   switch (_mem_int32[SELF>>2]) {
     case 255127510:
       return Sphere.normal_impl(SELF , p);
+    default:
+      throw FlatJS._badType(SELF);
+  }
+}
+Sphere.bounds = function (SELF ) {
+  switch (_mem_int32[SELF>>2]) {
+    case 255127510:
+      return Sphere.bounds_impl(SELF );
+    default:
+      throw FlatJS._badType(SELF);
+  }
+}
+Sphere.center = function (SELF ) {
+  switch (_mem_int32[SELF>>2]) {
+    case 255127510:
+      return Sphere.center_impl(SELF );
+    default:
+      throw FlatJS._badType(SELF);
+  }
+}
+Sphere.debug = function (SELF , print) {
+  switch (_mem_int32[SELF>>2]) {
+    case 255127510:
+      return Sphere.debug_impl(SELF , print);
     default:
       throw FlatJS._badType(SELF);
   }
@@ -294,6 +491,22 @@ Triangle.normal_impl = function (SELF, p) {
 	// TODO: Observe that the normal is invariant and can be stored with the triangle
 	return normalize(cross(subrefref((SELF + 120), (SELF + 96)), subrefref((SELF + 144), (SELF + 96))));
     }
+Triangle.bounds_impl = function (SELF) {
+	return {xmin: Math.min(_mem_float64[(SELF + 96) >> 3], _mem_float64[(SELF + 120) >> 3], _mem_float64[(SELF + 144) >> 3]),
+		xmax: Math.max(_mem_float64[(SELF + 96) >> 3], _mem_float64[(SELF + 120) >> 3], _mem_float64[(SELF + 144) >> 3]),
+		ymin: Math.min(_mem_float64[(SELF + 104) >> 3], _mem_float64[(SELF + 128) >> 3], _mem_float64[(SELF + 152) >> 3]),
+		ymax: Math.max(_mem_float64[(SELF + 104) >> 3], _mem_float64[(SELF + 128) >> 3], _mem_float64[(SELF + 152) >> 3]),
+		zmin: Math.min(_mem_float64[(SELF + 112) >> 3], _mem_float64[(SELF + 136) >> 3], _mem_float64[(SELF + 160) >> 3]),
+		zmax: Math.max(_mem_float64[(SELF + 112) >> 3], _mem_float64[(SELF + 136) >> 3], _mem_float64[(SELF + 160) >> 3])};
+    }
+Triangle.center_impl = function (SELF) {
+	return DL3((_mem_float64[(SELF + 96) >> 3] + _mem_float64[(SELF + 120) >> 3] + _mem_float64[(SELF + 144) >> 3])/3,
+		   (_mem_float64[(SELF + 104) >> 3] + _mem_float64[(SELF + 128) >> 3] + _mem_float64[(SELF + 152) >> 3])/3,
+		   (_mem_float64[(SELF + 112) >> 3] + _mem_float64[(SELF + 136) >> 3] + _mem_float64[(SELF + 160) >> 3])/3);
+    }
+Triangle.debug_impl = function (SELF, print) {
+	print("(T)");
+    }
 Triangle.intersect = function (SELF , eye,ray,min,max) {
   switch (_mem_int32[SELF>>2]) {
     case 217195274:
@@ -306,6 +519,30 @@ Triangle.normal = function (SELF , p) {
   switch (_mem_int32[SELF>>2]) {
     case 217195274:
       return Triangle.normal_impl(SELF , p);
+    default:
+      throw FlatJS._badType(SELF);
+  }
+}
+Triangle.bounds = function (SELF ) {
+  switch (_mem_int32[SELF>>2]) {
+    case 217195274:
+      return Triangle.bounds_impl(SELF );
+    default:
+      throw FlatJS._badType(SELF);
+  }
+}
+Triangle.center = function (SELF ) {
+  switch (_mem_int32[SELF>>2]) {
+    case 217195274:
+      return Triangle.center_impl(SELF );
+    default:
+      throw FlatJS._badType(SELF);
+  }
+}
+Triangle.debug = function (SELF , print) {
+  switch (_mem_int32[SELF>>2]) {
+    case 217195274:
+      return Triangle.debug_impl(SELF , print);
     default:
       throw FlatJS._badType(SELF);
   }

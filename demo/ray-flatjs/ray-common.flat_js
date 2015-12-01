@@ -92,7 +92,74 @@ function makeMaterial(diffuse, specular, shininess, ambient, mirror) {
     @virtual normal(SELF, p) {
 	throw "Pure: Surface.normal"
     }
+
+    @virtual bounds(SELF) {
+	throw "Pure: Surface.bounds"
+    }
+
+    @virtual center(SELF) {
+	throw "Pure: Surface.center"
+    }
+
+    @virtual debug(SELF, print) {
+    }
 } @end
+
+@flatjs class Volume extends Surface {
+    xmin: float64
+    xmax: float64
+    ymin: float64
+    ymax: float64
+    zmin: float64
+    zmax: float64
+    left: Surface
+    right: Surface
+
+    @method init(SELF, xmin, xmax, ymin, ymax, zmin, zmax, left, right) {
+	SELF.xmin = xmin;
+	SELF.xmax = xmax;
+	SELF.ymin = ymin;
+	SELF.ymax = ymax;
+	SELF.zmin = zmin;
+	SELF.zmax = zmax;
+	SELF.left = left;
+	SELF.right = right;
+	return SELF;
+    }
+
+    @virtual intersect(SELF, eye, ray, min, max) {
+	// FIXME
+	var intersects = 0;
+	if (intersects) {
+	    var r1 = Surface.intersect(SELF.left, eye, ray, min, max);
+	    if (SELF.right) {
+		var r2 = Surface.intersect(SELF.right, eye, ray, min, max);
+		if (r2.dist < r1.dist)
+		    return r2;
+	    }
+	    return r1;
+	}
+	return {obj:NULL, dist:SENTINEL};
+    }
+
+    @virtual bounds(SELF) {
+	return { xmin: SELF.xmin, xmax: SELF.xmax,
+		 ymin: SELF.ymin, ymax: SELF.ymax,
+		 zmin: SELF.zmin, zmax: SELF.zmax };
+    }
+
+    @virtual debug(SELF, print) {
+	print("[");
+	Surface.debug(SELF.left);
+	if (SELF.right) {
+	    print(",");
+	    Surface.debug(SELF.right);
+	}
+	print("]");
+    }
+} @end
+
+// Scene goes away, I think.
 
 @flatjs class Scene extends Surface {
     length: int32
@@ -118,12 +185,14 @@ function makeMaterial(diffuse, specular, shininess, ambient, mirror) {
 	    var tmp = Surface.intersect(surf, eye, ray, min, max);
 	    var obj = tmp.obj;
 	    var dist = tmp.dist;
-	    if (obj)
-		if (dist >= min && dist < max)
+	    if (obj) {
+		if (dist >= min && dist < max) {
 		    if (dist < min_dist) {
 			min_obj = obj;
 			min_dist = dist;
 		    }
+		}
+	    }
 	}
 	return {obj:min_obj, dist:min_dist};
     }
@@ -131,19 +200,19 @@ function makeMaterial(diffuse, specular, shininess, ambient, mirror) {
 } @end
 
 @flatjs class Sphere extends Surface {
-    center: Vec3
+    center0: Vec3
     radius: float64
 
-    @method init(SELF, material, center, radius) {
+    @method init(SELF, material, center0, radius) {
 	Surface.init(SELF, material)
-	SELF.center = center;
+	SELF.center0 = center0;
 	SELF.radius = radius
 	return SELF;
     }
 
     @virtual intersect(SELF, eye, ray, min, max) {
 	var DdotD = dot(ray, ray);
-	var EminusC = subvref(eye, SELF.center.ref);
+	var EminusC = subvref(eye, SELF.center0.ref);
 	var B = dot(ray, EminusC);
 	var disc = B*B - DdotD*(dot(EminusC,EminusC) - SELF.radius*SELF.radius);
 	if (disc < 0.0)
@@ -162,7 +231,21 @@ function makeMaterial(diffuse, specular, shininess, ambient, mirror) {
     }
 
     @virtual normal(SELF, p) {
-	return divi(subvref(p, SELF.center.ref), SELF.radius);
+	return divi(subvref(p, SELF.center0.ref), SELF.radius);
+    }
+
+    @virtual bounds(SELF) {
+	return {xmin: SELF.center0.x - SELF.radius, xmax: SELF.center0.x + SELF.radius,
+		ymin: SELF.center0.y - SELF.radius, ymax: SELF.center0.y + SELF.radius,
+		zmin: SELF.center0.z - SELF.radius, zmax: SELF.center0.z + SELF.radius};
+    }
+
+    @virtual center(SELF) {
+	return SELF.center0;
+    }
+
+    @virtual debug(SELF, print) {
+	print("(S c=" + SELF.center0 + " r=" + SELF.radius + ")");
     }
 } @end
 
@@ -214,6 +297,24 @@ function makeMaterial(diffuse, specular, shininess, ambient, mirror) {
 	return normalize(cross(subrefref(SELF.v2.ref, SELF.v1.ref), subrefref(SELF.v3.ref, SELF.v1.ref)));
     }
 
+    @virtual bounds(SELF) {
+	return {xmin: Math.min(SELF.v1.x, SELF.v2.x, SELF.v3.x),
+		xmax: Math.max(SELF.v1.x, SELF.v2.x, SELF.v3.x),
+		ymin: Math.min(SELF.v1.y, SELF.v2.y, SELF.v3.y),
+		ymax: Math.max(SELF.v1.y, SELF.v2.y, SELF.v3.y),
+		zmin: Math.min(SELF.v1.z, SELF.v2.z, SELF.v3.z),
+		zmax: Math.max(SELF.v1.z, SELF.v2.z, SELF.v3.z)};
+    }
+
+    @virtual center(SELF) {
+	return DL3((SELF.v1.x + SELF.v2.x + SELF.v3.x)/3,
+		   (SELF.v1.y + SELF.v2.y + SELF.v3.y)/3,
+		   (SELF.v1.z + SELF.v2.z + SELF.v3.z)/3);
+    }
+
+    @virtual debug(SELF, print) {
+	print("(T)");
+    }
 } @end
 
 @flatjs class Bitmap {
