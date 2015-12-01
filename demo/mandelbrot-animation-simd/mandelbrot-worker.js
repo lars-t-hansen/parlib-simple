@@ -63,7 +63,8 @@ function setup_asm(mem) {
 function mandelbrot_asm_module(glob, ffi, heap) {
     "use asm";
 
-    var i32 = new glob.SharedInt32Array(heap);
+    var i32 = new glob.Int32Array(heap);
+    var aload = glob.Atomics.load; // Declare shared memory
     var imul = glob.Math.imul;
     var toF = glob.Math.fround;
     const MAXIT = ffi.MAXIT|0;
@@ -138,8 +139,9 @@ var mandelbrot_asm =
 function mandelbrot_asm_simd_module(glob, ffi, heap) {
     "use asm";
 
-    var i32 = new glob.SharedInt32Array(heap);
-    var b8 = new glob.SharedUint8Array(heap);
+    var i32 = new glob.Int32Array(heap);
+    var b8 = new glob.Uint8Array(heap);
+    var aload = glob.Atomics.load; // Declare shared memory
     var imul = glob.Math.imul;
     var toF = glob.Math.fround;
     var i4 = glob.SIMD.Int32x4;

@@ -15,7 +15,7 @@ var sab = new SharedArrayBuffer(n + padding*2);
 var base = padding;
 
 // 32 bytes on each side is padding, we'll check at the end that they're untouched
-var tmp = new SharedUint8Array(sab);
+var tmp = new Uint8Array(sab);
 for ( var i=0 ; i < padding ; i++ ) {
     tmp[i] = 0xDE;
     tmp[tmp.length-1-i] = 0xBE;

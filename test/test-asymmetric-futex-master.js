@@ -10,7 +10,7 @@
 // TODO: also see the -worker code
 
 var sab = new SharedArrayBuffer(100);
-var iab = new SharedInt32Array(sab);
+var iab = new Int32Array(sab);
 var id = 0;
 var mf = new MasterFutex(iab, id);
 var testloc = 10;			// iab[10] and iab[11] are reserved for a futex loc

@@ -9,7 +9,7 @@ importScripts("../src/barrier.js");
 onmessage =
     function (ev) {
 	var [sab, bufIdx, bufSize, barrierIdx, numSegments, segmentSize, myID] = ev.data;
-        var iab = new SharedInt32Array(sab);
+        var iab = new Int32Array(sab);
         var barrier = new Barrier(iab, barrierIdx);
 
 	postMessage("ready " + myID);

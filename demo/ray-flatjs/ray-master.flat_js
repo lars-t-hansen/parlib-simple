@@ -31,7 +31,8 @@ function main() {
     const bits = Bitmap.init(@new Bitmap, g_height, g_width, DL3(152.0/256.0, 251.0/256.0, 152.0/256.0));
 
     // Note, numWorkers is set by the .html document.
-    const Par = new MasterPar(new SharedInt32Array(MasterPar.NUMINTS), 0, numWorkers, "ray-worker.js", doneParInit);
+    const Par = new MasterPar(new Int32Array(new SharedArrayBuffer(MasterPar.NUMINTS * Int32Array.BYTES_PER_ELEMENT)),
+			      0, numWorkers, "ray-worker.js", doneParInit);
 
     function doneParInit() {
 	Par.broadcast(doneSetup, "setup", RAW_MEMORY);
@@ -48,7 +49,7 @@ function main() {
 	var mycanvas = document.getElementById("mycanvas");
 	var cx = mycanvas.getContext('2d');
 	var id  = cx.createImageData(g_width, g_height);
-	id.data.set(new SharedUint8Array(RAW_MEMORY, Bitmap.data(bits), g_width*g_height*4));
+	id.data.set(new Uint8Array(RAW_MEMORY, Bitmap.data(bits), g_width*g_height*4));
 	cx.putImageData(id, 0, 0);
 	document.getElementById("mycaption").innerHTML = "Time=" + (now - then) + "ms";
     }

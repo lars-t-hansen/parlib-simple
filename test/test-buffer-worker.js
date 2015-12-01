@@ -12,7 +12,7 @@ var DEBUG = true;
 onmessage =
     function (ev) {
         var [sab, qIdx, qSize, bufferIdx, numElem, numWorkers, myID] = ev.data;
-        var iab = new SharedInt32Array(sab);
+        var iab = new Int32Array(sab);
         var q = new Buffer(iab, bufferIdx, iab, qIdx, qSize);
 
 	// Report back that we're running.

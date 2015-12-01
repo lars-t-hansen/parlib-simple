@@ -50,8 +50,8 @@ var World = function() {
     this.map = null;
     this.texmap = null;
 
-    this.map = new SharedFloat32Array(64 * 64 * 64);
-    this.texmap = new SharedFloat32Array(16 * 16 * 3 * 16);
+    this.map = new Float32Array(new SharedArrayBuffer(64 * 64 * 64 * Float32Array.BYTES_PER_ELEMENT));
+    this.texmap = new Float32Array(new SharedArrayBuffer(16 * 16 * 3 * 16 * Float32Array.BYTES_PER_ELEMENT));
     this.frames = 0;
     this.sharedResultArrays = null;	// Will be initialized when needed
     this.numResultArrays = 2;		// 1 or more
@@ -109,18 +109,18 @@ World.prototype.initializeWorkers = function () {
     if (this.sharedResultArrays != null)
 	return;
 
-    var INTSZ = SharedInt32Array.BYTES_PER_ELEMENT;
+    var INTSZ = Int32Array.BYTES_PER_ELEMENT;
     var sab = new SharedArrayBuffer((this.w*this.h*this.numResultArrays + MasterPar.NUMINTS)*INTSZ);
 
     this.sharedResultArrays = [];
     for ( var i=0 ; i < this.numResultArrays ; i++ ) {
-	var mem = this.sharedResultArrays[i] = new SharedUint8Array(sab, i*(this.w*this.h*INTSZ), this.w*this.h*INTSZ);
+	var mem = this.sharedResultArrays[i] = new Uint8Array(sab, i*(this.w*this.h*INTSZ), this.w*this.h*INTSZ);
 	// Initialize the Alpha value
 	for ( var j=0 ; j < this.w*this.h ; j++ )
 	    mem[j*4+3] = 0xFF;
     }
 
-    var meta = new SharedInt32Array(sab, this.w*this.h*this.numResultArrays*INTSZ, MasterPar.NUMINTS);
+    var meta = new Int32Array(sab, this.w*this.h*this.numResultArrays*INTSZ, MasterPar.NUMINTS);
     this.Par = new MasterPar(meta,
 			     0,
 			     numWorkers,

@@ -22,7 +22,7 @@ var numWorkers = 3;
 var numElem = 100;              // Number of elements to produce, per worker
 var q;
 
-var iab = new SharedInt32Array(iabSize);
+var iab = new Int32Array(new SharedArrayBuffer(iabSize*Int32Array.BYTES_PER_ELEMENT));
 Buffer.initialize(iab, bufferIdx);
 
 function runTest() {

@@ -14,11 +14,11 @@ const maxIterations = 400;
 // framework.
 
 const rawmem = new SharedArrayBuffer(roundupAsmJSHeapLength(4*(height*width*2 + MasterPar.NUMINTS + 8)));
-const mem1 = new SharedInt32Array(rawmem, 0, height*width);
-const mem2 = new SharedInt32Array(rawmem, height*width*4, height*width);
-const memp = new SharedInt32Array(rawmem, height*width*4*2, MasterPar.NUMINTS);
+const mem1 = new Int32Array(rawmem, 0, height*width);
+const mem2 = new Int32Array(rawmem, height*width*4, height*width);
+const memp = new Int32Array(rawmem, height*width*4*2, MasterPar.NUMINTS);
 const colbase = 4*(height*width*2 + MasterPar.NUMINTS);
-const colmem = new SharedInt32Array(rawmem, colbase, 8);
+const colmem = new Int32Array(rawmem, colbase, 8);
 
 // Note, numWorkers is set by the .html document.
 
@@ -86,7 +86,7 @@ function showMandelbrot() {
 
     if (doDisplay) {
 	canvasSetFromABGRBytes(document.getElementById("mycanvas"),
-			       new SharedUint8Array(rawmem, memnow.byteOffset, height*width*4),
+			       new Uint8Array(rawmem, memnow.byteOffset, height*width*4),
 			       height,
 			       width);
     }

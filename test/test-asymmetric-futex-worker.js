@@ -6,7 +6,7 @@ importScripts("../src/asymmetric-futex.js");
 
 onmessage = function (ev) {
     var [tag, sab, id, testloc] = ev.data;
-    var iab = new SharedInt32Array(sab);
+    var iab = new Int32Array(sab);
     var wf = new WorkerFutex(iab, id);
 
     // TODO: out-of-range wake counts

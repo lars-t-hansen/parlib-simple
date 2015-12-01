@@ -42,9 +42,9 @@ function IntQueue(sab, offset, length) {
     this._dataAvailable = new SynchronicInt32(sab, a.alloc(synSize, synAlign));
     this._lock = new SynchronicInt32(sab, a.alloc(synSize, synAlign));
 
-    this._meta = new SharedInt32Array(sab, a.alloc(intSize*3, intSize), 3);
+    this._meta = new Int32Array(sab, a.alloc(intSize*3, intSize), 3);
     var qlen = Math.floor(a.available(intSize) / intSize);
-    this._queue = new SharedInt32Array(sab, a.alloc(intSize*qlen, intSize), qlen);
+    this._queue = new Int32Array(sab, a.alloc(intSize*qlen, intSize), qlen);
 }
 
 /*

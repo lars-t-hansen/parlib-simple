@@ -1,7 +1,7 @@
 load("../src/float64atomics.js");
 
-var xx = new SharedInt32Array(Atomics.NUMF64INTS);
-var fa = new SharedFloat64Array(10);
+var xx = new Int32Array(new SharedArrayBuffer(Atomics.NUMF64INTS*Int32Array.BYTES_PER_ELEMENT));
+var fa = new Float64Array(new SharedArrayBuffer(10*Float64Array.BYTES_PER_ELEMENT));
 
 Atomics.float64Init(xx, 0);
 

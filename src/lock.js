@@ -30,12 +30,12 @@
 
 // Create a lock object.
 //
-// 'iab' must be a SharedInt32Array.
+// 'iab' must be a Int32Array mapping shared memory.
 // 'ibase' must be a valid index in iab, the first of Lock.NUMINTS reserved for the lock.
 //
 // iab and ibase will be exposed on Lock.
 function Lock(iab, ibase) {
-    if (!(iab instanceof SharedInt32Array && ibase|0 == ibase && ibase >= 0 && ibase+Lock.NUMINTS <= iab.length))
+    if (!(iab instanceof Int32Array && ibase|0 == ibase && ibase >= 0 && ibase+Lock.NUMINTS <= iab.length))
 	throw new Error("Bad arguments to Lock constructor: " + iab + " " + ibase);
     this.iab = iab;
     this.ibase = ibase;
@@ -47,14 +47,14 @@ Lock.NUMINTS = 1;
 // Initialize shared memory for a lock, before constructing the
 // worker-local Lock objects on that memory.
 //
-// 'iab' must be a SharedInt32Array.
+// 'iab' must be an Int32Array mapping shared memory.
 // 'ibase' must be a valid index in iab, the first of Lock.NUMINTS reserved
 // for the lock.
 //
 // Returns 'ibase'.
 Lock.initialize =
     function (iab, ibase) {
-	if (!(iab instanceof SharedInt32Array && ibase|0 == ibase && ibase >= 0 && ibase+Lock.NUMINTS <= iab.length))
+	if (!(iab instanceof Int32Array && ibase|0 == ibase && ibase >= 0 && ibase+Lock.NUMINTS <= iab.length))
 	    throw new Error("Bad arguments to Lock initializer: " + iab + " " + ibase);
 	Atomics.store(iab, ibase, 0);
 	return ibase;
@@ -145,7 +145,7 @@ Cond.NUMINTS = 1;
 // Returns 'ibase'.
 Cond.initialize =
     function (iab, ibase) {
-	if (!(iab instanceof SharedInt32Array && ibase|0 == ibase && ibase >= 0 && ibase+Cond.NUMINTS <= iab.length))
+	if (!(iab instanceof Int32Array && ibase|0 == ibase && ibase >= 0 && ibase+Cond.NUMINTS <= iab.length))
 	    throw new Error("Bad arguments to Cond initializer: " + iab + " " + ibase);
 	Atomics.store(iab, ibase, 0);
 	return ibase;

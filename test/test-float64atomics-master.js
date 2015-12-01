@@ -17,9 +17,9 @@
 var numWorkers = 5;
 var nbytes = (8 + 4*(MasterBarrier.NUMINTS + Atomics.NUMF64INTS) + 7) & ~7;
 var sab = new SharedArrayBuffer(nbytes);
-var dab = new SharedFloat64Array(sab);
+var dab = new Float64Array(sab);
 var accIdx = 0;
-var iab = new SharedInt32Array(sab);
+var iab = new Int32Array(sab);
 var barrierIdx = 2;
 var atomicIdx = barrierIdx + MasterBarrier.NUMINTS;
 var barrierId = 1337;
