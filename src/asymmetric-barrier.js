@@ -46,7 +46,7 @@
 
 // Create the master side of a barrier.
 //
-// - 'iab' is a SharedInt32Array
+// - 'iab' is an Int32Array on shared memory.
 // - 'ibase' is the first of MasterBarrier.NUMINTS consecutive locations
 //   within 'iab'
 // - 'ID' identifies the barrier globally
@@ -134,7 +134,7 @@ MasterBarrier.prototype.release =
 
 // Create the worker side of a barrier.
 //
-// - 'iab' is a SharedInt32Array
+// - 'iab' is an Int32Array on shared memory
 // - 'ibase' is the first of several consecutive locations within 'iab'
 // - 'ID' identifies the barrier globally
 //

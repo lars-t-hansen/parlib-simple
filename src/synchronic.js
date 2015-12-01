@@ -447,14 +447,14 @@ const _Synchronic_constructor = function (constructor, methods) {
     const _coerce_uint = function (v) { return v>>>0; }
 
     switch (constructor) {
-    case SharedInt8Array:    tag = "int8"; break;
-    case SharedUint8Array:   tag = "uint8"; break;
-    case SharedInt16Array:   tag = "int16"; break;
-    case SharedUint16Array:  tag = "uint16"; break;
-    case SharedInt32Array:   tag = "int32"; break;
-    case SharedUint32Array:  tag = "uint32"; break;
-    case SharedFloat32Array: tag = "float32"; break;
-    case SharedFloat64Array: tag = "float64"; break;
+    case Int8Array:    tag = "int8"; break;
+    case Uint8Array:   tag = "uint8"; break;
+    case Int16Array:   tag = "int16"; break;
+    case Uint16Array:  tag = "uint16"; break;
+    case Int32Array:   tag = "int32"; break;
+    case Uint32Array:  tag = "uint32"; break;
+    case Float32Array: tag = "float32"; break;
+    case Float64Array: tag = "float64"; break;
     default:                 throw new Error("Invalid constructor for Synchronic: " + constructor);
     }
 
@@ -469,7 +469,7 @@ const _Synchronic_constructor = function (constructor, methods) {
 	if (offset + _SYN_SYNSIZE > sab.byteLength)
 	    throw new Error("Synchronic extends beyond end of buffer");
 	if (!sab._synchronic_int32_view)
-	    sab._synchronic_int32_view = new SharedInt32Array(sab);
+	    sab._synchronic_int32_view = new Int32Array(sab);
 	if (!sab[taName])
 	    sab[taName] = new constructor(sab);
 	this._ta = sab[taName];
@@ -498,11 +498,11 @@ const _Synchronic_constructor = function (constructor, methods) {
     return makeSynchronicType;
 }
 
-var SynchronicInt8 = _Synchronic_constructor(SharedInt8Array, _Synchronic_int_methods);
-var SynchronicUint8 = _Synchronic_constructor(SharedUint8Array, _Synchronic_int_methods);
-var SynchronicInt16 = _Synchronic_constructor(SharedInt16Array, _Synchronic_int_methods);
-var SynchronicUint16 = _Synchronic_constructor(SharedUint16Array, _Synchronic_int_methods);
-var SynchronicInt32 = _Synchronic_constructor(SharedInt32Array, _Synchronic_int_methods);
-var SynchronicUint32 = _Synchronic_constructor(SharedUint32Array, _Synchronic_int_methods);
-var SynchronicFloat32 = _Synchronic_constructor(SharedFloat32Array, _Synchronic_float_methods);
-var SynchronicFloat64 = _Synchronic_constructor(SharedFloat64Array, _Synchronic_float_methods);
+var SynchronicInt8 = _Synchronic_constructor(Int8Array, _Synchronic_int_methods);
+var SynchronicUint8 = _Synchronic_constructor(Uint8Array, _Synchronic_int_methods);
+var SynchronicInt16 = _Synchronic_constructor(Int16Array, _Synchronic_int_methods);
+var SynchronicUint16 = _Synchronic_constructor(Uint16Array, _Synchronic_int_methods);
+var SynchronicInt32 = _Synchronic_constructor(Int32Array, _Synchronic_int_methods);
+var SynchronicUint32 = _Synchronic_constructor(Uint32Array, _Synchronic_int_methods);
+var SynchronicFloat32 = _Synchronic_constructor(Float32Array, _Synchronic_float_methods);
+var SynchronicFloat64 = _Synchronic_constructor(Float64Array, _Synchronic_float_methods);

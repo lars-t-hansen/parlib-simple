@@ -7,9 +7,9 @@ var padding = 32;
 var height = 45;
 var width = 37;
 var arraySize = height*width;
-var mem = new SharedInt32Array(2*padding + MasterPar.NUMINTS + arraySize);
-var array = new SharedInt32Array(mem.buffer, (padding+MasterPar.NUMINTS)*4, arraySize);
-var aux = new SharedInt32Array(numWorkers); // This needs to have a distinct SharedArrayBuffer
+var mem = new Int32Array(new SharedArrayBuffer((2*padding + MasterPar.NUMINTS + arraySize)*Int32Array.BYTES_PER_ELEMENT));
+var array = new Int32Array(new SharedArrayBuffer((mem.buffer, (padding+MasterPar.NUMINTS)*4, arraySize)*Int32Array.BYTES_PER_ELEMENT));
+var aux = new Int32Array(new SharedArrayBuffer(numWorkers*Int32Array.BYTES_PER_ELEMENT)); // This needs to have a distinct SharedArrayBuffer
 var Par;
 var bias = 37;
 

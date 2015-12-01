@@ -100,10 +100,7 @@ ArrayBufferArena.prototype._getInitMem = function () {
 	var ab = this._ab;
 	var offset = this._offset;
 	var length = this._limit - offset;
-	if (ab instanceof SharedArrayBuffer)
-	    this._initMem = new SharedInt8Array(ab, 0, offset+length);
-	else
-	    this._initMem = new Int8Array(ab, 0, offset+length);
+	this._initMem = new Int8Array(ab, 0, offset+length);
     }
     return this._initMem;
 }

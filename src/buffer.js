@@ -7,7 +7,7 @@
  *
  * This is built on the locks and condition variables in lock.js and
  * is fairly limited, but supports any primitive type of element (eg,
- * it can be constructed on top of a SharedFloat64Array).
+ * it can be constructed on top of a Float64Array).
  *
  * For an alternative approach that supports bundles of integer items
  * and that also allows for timeouts, and which is built on
@@ -38,10 +38,10 @@
 
 // Create a Buffer object.
 //
-// 'iab' is a SharedInt32Array, for book-keeping data.
+// 'iab' is a Int32Array on a SharedArrayBuffer, for book-keeping data.
 // 'ibase' is the first of Buffer.NUMINTS locations in iab reserved
 // for this Buffer.
-// 'dab' is a SharedTypedArray, for the buffer data.
+// 'dab' is a TypedArray on a SharedArrayBuffer, for the buffer data.
 // 'dbase' is the first location in 'dab' for buffer data.
 // 'dsize' is the number of locations in 'dab' for buffer data.
 //
@@ -53,9 +53,9 @@
 // iab, ibase, dab, dbase, and dsize will be exposed on the Barrier.
 
 function Buffer(iab, ibase, dab, dbase, dsize) {
-    // TODO: could also check that dab is any SharedTypedArray and
+    // TODO: could also check that dab is any TypedArray and
     // that dbase and dsize are in bounds.
-    if (!(iab instanceof SharedInt32Array && ibase|0 == ibase && ibase >= 0 && ibase+Buffer.NUMINTS <= iab.length))
+    if (!(iab instanceof Int32Array && ibase|0 == ibase && ibase >= 0 && ibase+Buffer.NUMINTS <= iab.length))
 	throw new Error("Bad arguments to Buffer constructor: " + iab + " " + ibase);
     this.iab = iab;
     this.ibase = ibase;
@@ -75,14 +75,14 @@ Buffer.NUMINTS = Lock.NUMINTS + 2*Cond.NUMINTS + 5;
 // Initialize shared memory for a Buffer object (its private memory,
 // not the buffer memory proper).
 //
-// 'iab' is a SharedInt32Array, for book-keeping data.
+// 'iab' is a Int32Array on a SharedArrayBuffer, for book-keeping data.
 // 'ibase' is the first of Buffer.NUMINTS locations in iab reserved
 // for this Buffer.
 //
 // Returns 'ibase'.
 Buffer.initialize =
     function (iab, ibase) {
-	if (!(iab instanceof SharedInt32Array && ibase|0 == ibase && ibase >= 0 && ibase+Buffer.NUMINTS <= iab.length))
+	if (!(iab instanceof Int32Array && ibase|0 == ibase && ibase >= 0 && ibase+Buffer.NUMINTS <= iab.length))
 	    throw new Error("Bad arguments to Buffer initializer: " + iab + " " + ibase);
 	const leftIdx = ibase;
 	const rightIdx = ibase+1;

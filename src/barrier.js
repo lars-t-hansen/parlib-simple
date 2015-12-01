@@ -22,13 +22,13 @@
 
 // Create a barrier object.
 //
-// 'iab' is a SharedInt32Array.
+// 'iab' is an Int32Array on shared memory.
 // 'ibase' is the first of Barrier.NUMINTS slots within iab reserved
 // for the barrier.
 //
 // iab and ibase will be exposed on the Barrier.
 function Barrier(iab, ibase) {
-    if (!(iab instanceof SharedInt32Array && ibase|0 == ibase && ibase >= 0 && ibase+Barrier.NUMINTS <= iab.length))
+    if (!(iab instanceof Int32Array && ibase|0 == ibase && ibase >= 0 && ibase+Barrier.NUMINTS <= iab.length))
 	throw new Error("Bad arguments to Barrier constructor: " + iab + " " + ibase);
     this.iab = iab;
     this.ibase = ibase;
@@ -39,7 +39,7 @@ Barrier.NUMINTS = 3;
 
 // Initialize the shared memory for a barrier.
 //
-// 'iab' is a SharedInt32Array.
+// 'iab' is an Int32Array on shared memory.
 // 'ibase' is the first of Barrier.NUMINTS slots within iab reserved
 // for the barrier.
 // 'numAgents' is the number of participants in the barrier.
@@ -47,7 +47,7 @@ Barrier.NUMINTS = 3;
 // Returns 'ibase'.
 Barrier.initialize =
     function (iab, ibase, numAgents) {
-	if (!(iab instanceof SharedInt32Array &&
+	if (!(iab instanceof Int32Array &&
 	      ibase|0 == ibase &&
 	      ibase >= 0 &&
 	      ibase+Barrier.NUMINTS <= iab.length &&

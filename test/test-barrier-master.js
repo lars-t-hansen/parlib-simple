@@ -26,7 +26,7 @@ var bufSize = segmentSize*numSegments;
 var barrierIdx = bufIdx+bufSize;
 var iabSize = barrierIdx + Barrier.NUMINTS;
 
-var iab = new SharedInt32Array(iabSize);
+var iab = new Int32Array(new SharedArrayBuffer(iabSize*Int32Array.BYTES_PER_ELEMENT));
 Barrier.initialize(iab, barrierIdx, numSegments);
 var barrier = new Barrier(iab, barrierIdx);
 

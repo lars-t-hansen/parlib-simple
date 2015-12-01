@@ -9,8 +9,8 @@ importScripts("../src/asymmetric-barrier.js");
 onmessage =
     function (ev) {
 	var [sab, numIter, barrierIdx, barrierID, addendIdx, segmentBase, segmentSize] = ev.data;
-        var iab = new SharedInt32Array(sab);
-	var dab = new SharedFloat64Array(sab);
+        var iab = new Int32Array(sab);
+	var dab = new Float64Array(sab);
         var barrier = new WorkerBarrier(iab, barrierIdx, barrierID);
 
 	postMessage([numIter, barrierIdx, barrierID, addendIdx, segmentBase, segmentSize].join(" "));

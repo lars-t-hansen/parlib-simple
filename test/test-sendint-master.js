@@ -28,7 +28,7 @@ w.postMessage([sab, 0, 512, iterations], [sab]);
 console.log("Master waiting");
 
 function workerReady(ev) {
-    var iab = new SharedInt32Array(sab, locIdx, 1);
+    var iab = new Int32Array(sab, locIdx, 1);
     var start = Date.now();
 
     for ( var i=0 ; i < iterations ; i++ ) {

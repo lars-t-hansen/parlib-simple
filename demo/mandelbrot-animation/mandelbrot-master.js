@@ -22,8 +22,8 @@ const maxIterations = 250;	// Set to 1 for a single frame
 // for the barrier that is used to coordinate workers.
 
 const rawmem = new SharedArrayBuffer((height*width + MasterBarrier.NUMINTS)*4 + 1*8);
-const intmem = new SharedInt32Array(rawmem, 0, height*width + MasterBarrier.NUMINTS);
-const flomem = new SharedFloat64Array(rawmem, (height*width + MasterBarrier.NUMINTS)*4, 1);
+const intmem = new Int32Array(rawmem, 0, height*width + MasterBarrier.NUMINTS);
+const flomem = new Float64Array(rawmem, (height*width + MasterBarrier.NUMINTS)*4, 1);
 const barrierLoc = (height*width); // Within intmem
 const magnificationLoc = 0;        // Within flomem
 const barrierID = 1337;
@@ -64,7 +64,7 @@ function barrierCallback() {
 	timeBefore = Date.now();
     else {
 	canvasSetFromABGRBytes(document.getElementById("mycanvas"),
-			       new SharedUint8Array(rawmem, 0, height*width*4),
+			       new Uint8Array(rawmem, 0, height*width*4),
 			       height,
 			       width);
 	magnification *= magFactor;

@@ -6,8 +6,9 @@ const g_center_y = 0.131825904205311970493132056385139;
 const height = 480;
 const width = 640;
 
-// Max iterations
-const MAXIT = 200;
+// Max iterations.  This is referenced as a property on the global
+// object, so can't be "const".
+var MAXIT = 200;
 
 // The Intel Mandelbrot SIMD demo uses these:
 // const height = 400;

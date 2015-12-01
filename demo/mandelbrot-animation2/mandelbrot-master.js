@@ -14,9 +14,9 @@ const maxIterations = 250;
 // framework.
 
 const rawmem = new SharedArrayBuffer(4*(height*width*2 + MasterPar.NUMINTS));
-const mem1 = new SharedInt32Array(rawmem, 0, height*width);
-const mem2 = new SharedInt32Array(rawmem, height*width*4, height*width);
-const memp = new SharedInt32Array(rawmem, height*width*4*2, MasterPar.NUMINTS);
+const mem1 = new Int32Array(rawmem, 0, height*width);
+const mem2 = new Int32Array(rawmem, height*width*4, height*width);
+const memp = new Int32Array(rawmem, height*width*4*2, MasterPar.NUMINTS);
 
 // Note, numWorkers is set by the .html document.
 
@@ -48,7 +48,7 @@ function showMandelbrot() {
 	document.getElementById('mystatus').innerHTML = "Number of workers: " + numWorkers + "  Compute time: " + t + "ms  FPS=" + fps;
     }
     canvasSetFromABGRBytes(document.getElementById("mycanvas"),
-			   new SharedUint8Array(rawmem, memnow.byteOffset, height*width*4),
+			   new Uint8Array(rawmem, memnow.byteOffset, height*width*4),
 			   height,
 			   width);
 }

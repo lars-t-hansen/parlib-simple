@@ -3,8 +3,8 @@ importScripts("../src/float64atomics.js",
 
 onmessage = function (ev) {
     var [sab, barrierIdx, barrierId, accIdx, atomicIdx, iterations] = ev.data;
-    var dab = new SharedFloat64Array(sab);
-    var iab = new SharedInt32Array(sab);
+    var dab = new Float64Array(sab);
+    var iab = new Int32Array(sab);
     var barrier = new WorkerBarrier(iab, barrierIdx, barrierId);
 
     Atomics.float64Init(iab, atomicIdx);
