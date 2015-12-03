@@ -28,10 +28,10 @@ function main() {
     // Input: the scene graph, in shared memory
     const [eye, light, background, world] = setStage();
 
-    var s = "";
-    Surface.debug(world, function (x) { s += x });
-    console.log(s);
-    return;
+    //var s = "";
+    //Surface.debug(world, function (x) { s += x }, 0);
+    //console.log(s);
+    //return;
 
     // Output: the bitmap, in shared memory
     const bits = Bitmap.init(Bitmap.initInstance(FlatJS.allocOrThrow(16,4)), g_height, g_width, DL3(152.0/256.0, 251.0/256.0, 152.0/256.0));
@@ -127,13 +127,14 @@ function setStage() {
 
     // Create bounding volume hierarchy here, and use that for the Scene.  Scene goes away, I think.
 
-    //return [eye, light, background, Scene.init(Scene.initInstance(FlatJS.allocOrThrow(104,8)), world)];
     return [eye, light, background, partition(world, computeBounds(world), 0)];
 }
 
 function partition(surfaces, bounds, axis) {
+    //console.log("Surfaces: " + surfaces.length + " axis: " + axis);
     var left=null, right=null;
     var { xmin, xmax, ymin, ymax, zmin, zmax } = bounds;
+    //console.log("Bounds: " + xmin + " " + xmax + " " + ymin + " " + ymax + " " + zmin + " " + zmax);
     if (surfaces.length == 1) {
 	left = surfaces[0];
 	right = null;
@@ -145,33 +146,37 @@ function partition(surfaces, bounds, axis) {
     else {
 	var mid = 0;
 	var center;
-	if (axis == 0) {
-	    mid = (xmax - xmin) / 2;
-	    center = (s) => Surface.center(s).x
+	var safety = 4;
+	for (;;) {
+	    if (!--safety)
+		throw new Error("Unable to partition list of length " + surfaces.length);
+	    if (axis == 0) {
+		mid = (xmax + xmin) / 2;
+		center = (s) => Surface.center(s).x
+	    }
+	    else if (axis == 1) {
+		mid = (ymax + ymin) / 2;
+		center = (s) => Surface.center(s).y
+	    }
+	    else {
+		mid = (zmax + zmin) / 2;
+		center = (s) => Surface.center(s).z
+	    }
+	    //console.log("Mid=" + mid);
+	    var lobj = [];
+	    var robj = [];
+	    for ( var i=0 ; i < surfaces.length ; i++ ) {
+		if (center(surfaces[i]) <= mid)
+		    lobj.push(surfaces[i]);
+		else
+		    robj.push(surfaces[i]);
+	    }
+	    axis = (axis + 1) % 3;
+	    if (robj.length && lobj.length)
+		break;
 	}
-	else if (axis == 1) {
-	    mid = (ymax - ymin) / 2;
-	    center = (s) => Surface.center(s).y
-	}
-	else {
-	    mid = (zmax - zmin) / 2;
-	    center = (s) => Surface.center(s).z
-	}
-	var lobj = [];
-	var robj = [];
-	for ( var i=0 ; i < surfaces.length ; i++ ) {
-	    if (center(surfaces[i]) <= mid)
-		lobj.push(surfaces[i]);
-	    else
-		robj.push(surfaces[i]);
-	}
-	axis = (axis + 1) % 3;
-	if (robj.length && !lobj.length) {
-	    lobj = robj;
-	    robj = [];
-	}
-	left = partition(lobj, computeBounds(lobj), axis);
-	right = robj.length ? partition(robj, computeBounds(robj), axis) : null;
+	left = lobj.length == 1 ? lobj[0] : partition(lobj, computeBounds(lobj), axis);
+	right = robj.length == 1 ? robj[0] : partition(robj, computeBounds(robj), axis);
     }
     return Volume.init(Volume.initInstance(FlatJS.allocOrThrow(152,8)), xmin, xmax, ymin, ymax, zmin, zmax, left, right);
 }

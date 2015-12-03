@@ -23,6 +23,8 @@ const g_right = 2;
 const g_top = 1.5;
 const g_bottom = -1.5;
 
+var g_volintersect = 0;
+
 // END CONFIGURATION
 
 const debug = false;		// Progress printout, may confuse the consumer
@@ -117,7 +119,7 @@ Surface.bounds_impl = function (SELF) {
 Surface.center_impl = function (SELF) {
 	throw "Pure: Surface.center"
     }
-Surface.debug_impl = function (SELF, print) {
+Surface.debug_impl = function (SELF, print, level) {
     }
 Surface.intersect = function (SELF , eye,ray,min,max) {
   switch (_mem_int32[SELF>>2]) {
@@ -178,17 +180,17 @@ Surface.center = function (SELF ) {
       throw FlatJS._badType(SELF);
   }
 }
-Surface.debug = function (SELF , print) {
+Surface.debug = function (SELF , print,level) {
   switch (_mem_int32[SELF>>2]) {
     case 12421246:
     case 31908292:
-      return Surface.debug_impl(SELF , print);
+      return Surface.debug_impl(SELF , print,level);
     case 255294398:
-      return Volume.debug_impl(SELF , print);
+      return Volume.debug_impl(SELF , print,level);
     case 255127510:
-      return Sphere.debug_impl(SELF , print);
+      return Sphere.debug_impl(SELF , print,level);
     case 217195274:
-      return Triangle.debug_impl(SELF , print);
+      return Triangle.debug_impl(SELF , print,level);
     default:
       throw FlatJS._badType(SELF);
   }
@@ -215,30 +217,73 @@ Volume.init = function (SELF, xmin, xmax, ymin, ymax, zmin, zmax, left, right) {
 	return SELF;
     }
 Volume.intersect_impl = function (SELF, eye, ray, min, max) {
-	// FIXME
-	var intersects = 0;
+	//g_volintersect++;
+	// What about min and max in all of this?
+	var txmin, txmax, tymin, tymax, tzmin, tzmax;
+	var a = 1/ray.x;
+	if (a >= 0) {
+	    txmin = (_mem_float64[(SELF + 96) >> 3] - eye.x)*a;
+	    txmax = (_mem_float64[(SELF + 104) >> 3] - eye.x)*a;
+	}
+	else {
+	    txmin = (_mem_float64[(SELF + 104) >> 3] - eye.x)*a;
+	    txmax = (_mem_float64[(SELF + 96) >> 3] - eye.x)*a;
+	}
+	var a = 1/ray.y;
+	if (a >= 0) {
+	    tymin = (_mem_float64[(SELF + 112) >> 3] - eye.y)*a;
+	    tymax = (_mem_float64[(SELF + 120) >> 3] - eye.y)*a;
+	}
+	else {
+	    tymin = (_mem_float64[(SELF + 120) >> 3] - eye.y)*a;
+	    tymax = (_mem_float64[(SELF + 112) >> 3] - eye.y)*a;
+	}
+	var a = 1/ray.z;
+	if (a >= 0) {
+	    tzmin = (_mem_float64[(SELF + 128) >> 3] - eye.z)*a;
+	    tzmax = (_mem_float64[(SELF + 136) >> 3] - eye.z)*a;
+	}
+	else {
+	    tzmin = (_mem_float64[(SELF + 136) >> 3] - eye.z)*a;
+	    tzmax = (_mem_float64[(SELF + 128) >> 3] - eye.z)*a;
+	}
+	// Intersects if they all pairwise intersect
+	var intersects = (((txmin > tymax) || (tymin > txmax)) ||
+			  ((txmin > tzmax) || (tzmin > txmax)) ||
+			  ((tymin > tzmax) || (tzmin > tymax)));
+	// TODO:
+	// Does this not work because the computations above are not correct
+	// or because the bounding box values are not correct?
 	if (intersects) {
 	    var r1 = Surface.intersect(_mem_int32[(SELF + 144) >> 2], eye, ray, min, max);
+	    if (r1.obj) {
+		if (!(r1.dist >= min && r1.dist < max))
+		    r1 = {obj:NULL, dist:0};
+	    }
 	    if (_mem_int32[(SELF + 148) >> 2]) {
 		var r2 = Surface.intersect(_mem_int32[(SELF + 148) >> 2], eye, ray, min, max);
-		if (r2.dist < r1.dist)
-		    return r2;
+		if (r2.obj && r2.dist >= min && r2.dist < max) {
+		    if (!r1.obj || r2.dist < r1.dist)
+			return r2;
+		}
 	    }
 	    return r1;
 	}
-	return {obj:NULL, dist:SENTINEL};
+	return {obj:NULL, dist:0};
     }
 Volume.bounds_impl = function (SELF) {
 	return { xmin: _mem_float64[(SELF + 96) >> 3], xmax: _mem_float64[(SELF + 104) >> 3],
 		 ymin: _mem_float64[(SELF + 112) >> 3], ymax: _mem_float64[(SELF + 120) >> 3],
 		 zmin: _mem_float64[(SELF + 128) >> 3], zmax: _mem_float64[(SELF + 136) >> 3] };
     }
-Volume.debug_impl = function (SELF, print) {
+Volume.debug_impl = function (SELF, print, level) {
 	print("[");
-	Surface.debug(_mem_int32[(SELF + 144) >> 2]);
+	Surface.debug(_mem_int32[(SELF + 144) >> 2], print, level+1);
 	if (_mem_int32[(SELF + 148) >> 2]) {
-	    print(",");
-	    Surface.debug(_mem_int32[(SELF + 148) >> 2]);
+	    print(",\n");
+	    for ( var i=0 ; i < level ; i++ )
+		print(" ");
+	    Surface.debug(_mem_int32[(SELF + 148) >> 2], print, level+1);
 	}
 	print("]");
     }
@@ -258,10 +303,10 @@ Volume.bounds = function (SELF ) {
       throw FlatJS._badType(SELF);
   }
 }
-Volume.debug = function (SELF , print) {
+Volume.debug = function (SELF , print,level) {
   switch (_mem_int32[SELF>>2]) {
     case 255294398:
-      return Volume.debug_impl(SELF , print);
+      return Volume.debug_impl(SELF , print,level);
     default:
       throw FlatJS._badType(SELF);
   }
@@ -346,10 +391,10 @@ Scene.center = function (SELF ) {
       return Surface.center_impl(SELF );
   }
 }
-Scene.debug = function (SELF , print) {
+Scene.debug = function (SELF , print,level) {
   switch (_mem_int32[SELF>>2]) {
     default:
-      return Surface.debug_impl(SELF , print);
+      return Surface.debug_impl(SELF , print,level);
   }
 }
 Scene.initInstance = function(SELF) { _mem_int32[SELF>>2]=31908292; return SELF; }
@@ -369,6 +414,7 @@ Sphere.init = function (SELF, material, center0, radius) {
 	return SELF;
     }
 Sphere.intersect_impl = function (SELF, eye, ray, min, max) {
+	//g_sphereintersect++;
 	var DdotD = dot(ray, ray);
 	var EminusC = subvref(eye, (SELF + 96));
 	var B = dot(ray, EminusC);
@@ -398,7 +444,7 @@ Sphere.bounds_impl = function (SELF) {
 Sphere.center_impl = function (SELF) {
 	return Vec3._get_impl((SELF + 96));
     }
-Sphere.debug_impl = function (SELF, print) {
+Sphere.debug_impl = function (SELF, print, level) {
 	print("(S c=" + Vec3._get_impl((SELF + 96)) + " r=" + _mem_float64[(SELF + 120) >> 3] + ")");
     }
 Sphere.intersect = function (SELF , eye,ray,min,max) {
@@ -433,10 +479,10 @@ Sphere.center = function (SELF ) {
       throw FlatJS._badType(SELF);
   }
 }
-Sphere.debug = function (SELF , print) {
+Sphere.debug = function (SELF , print,level) {
   switch (_mem_int32[SELF>>2]) {
     case 255127510:
-      return Sphere.debug_impl(SELF , print);
+      return Sphere.debug_impl(SELF , print,level);
     default:
       throw FlatJS._badType(SELF);
   }
@@ -504,7 +550,7 @@ Triangle.center_impl = function (SELF) {
 		   (_mem_float64[(SELF + 104) >> 3] + _mem_float64[(SELF + 128) >> 3] + _mem_float64[(SELF + 152) >> 3])/3,
 		   (_mem_float64[(SELF + 112) >> 3] + _mem_float64[(SELF + 136) >> 3] + _mem_float64[(SELF + 160) >> 3])/3);
     }
-Triangle.debug_impl = function (SELF, print) {
+Triangle.debug_impl = function (SELF, print, level) {
 	print("(T)");
     }
 Triangle.intersect = function (SELF , eye,ray,min,max) {
@@ -539,10 +585,10 @@ Triangle.center = function (SELF ) {
       throw FlatJS._badType(SELF);
   }
 }
-Triangle.debug = function (SELF , print) {
+Triangle.debug = function (SELF , print,level) {
   switch (_mem_int32[SELF>>2]) {
     case 217195274:
-      return Triangle.debug_impl(SELF , print);
+      return Triangle.debug_impl(SELF , print,level);
     default:
       throw FlatJS._badType(SELF);
   }

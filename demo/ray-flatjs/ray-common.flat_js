@@ -22,6 +22,8 @@ const g_right = 2;
 const g_top = 1.5;
 const g_bottom = -1.5;
 
+var g_volintersect = 0;
+
 // END CONFIGURATION
 
 const debug = false;		// Progress printout, may confuse the consumer
@@ -101,7 +103,7 @@ function makeMaterial(diffuse, specular, shininess, ambient, mirror) {
 	throw "Pure: Surface.center"
     }
 
-    @virtual debug(SELF, print) {
+    @virtual debug(SELF, print, level) {
     }
 } @end
 
@@ -128,18 +130,61 @@ function makeMaterial(diffuse, specular, shininess, ambient, mirror) {
     }
 
     @virtual intersect(SELF, eye, ray, min, max) {
-	// FIXME
-	var intersects = 0;
+	//g_volintersect++;
+	var txmin, txmax, tymin, tymax, tzmin, tzmax;
+	var a = 1/ray.x;
+	if (a >= 0) {
+	    txmin = (SELF.xmin - eye.x)*a;
+	    txmax = (SELF.xmax - eye.x)*a;
+	}
+	else {
+	    txmin = (SELF.xmax - eye.x)*a;
+	    txmax = (SELF.xmin - eye.x)*a;
+	}
+	var a = 1/ray.y;
+	if (a >= 0) {
+	    tymin = (SELF.ymin - eye.y)*a;
+	    tymax = (SELF.ymax - eye.y)*a;
+	}
+	else {
+	    tymin = (SELF.ymax - eye.y)*a;
+	    tymax = (SELF.ymin - eye.y)*a;
+	}
+	var a = 1/ray.z;
+	if (a >= 0) {
+	    tzmin = (SELF.zmin - eye.z)*a;
+	    tzmax = (SELF.zmax - eye.z)*a;
+	}
+	else {
+	    tzmin = (SELF.zmax - eye.z)*a;
+	    tzmax = (SELF.zmin - eye.z)*a;
+	}
+	// Intersects if they all pairwise intersect
+	// var intersects = (!((txmin > tymax) || (tymin > txmax)) ||
+	// 		  !((txmin > tzmax) || (tzmin > txmax)) ||
+	// 		  !((tymin > tzmax) || (tzmin > tymax)));
+	var intersects = ((txmin > SELF.xmin && txmin < SELF.xmax || txmax > SELF.xmin && txmax < SELF.xmax) &&
+			  (tymin > SELF.ymin && tymin < SELF.ymax || tymax > SELF.ymin && tymax < SELF.ymax) &&
+			  (tzmin > SELF.zmin && tzmin < SELF.zmax || tzmax > SELF.zmin && tzmax < SELF.zmax));
+	// TODO:
+	// Does this not work because the computations above are not correct
+	// or because the bounding box values are not correct?
 	if (intersects) {
 	    var r1 = Surface.intersect(SELF.left, eye, ray, min, max);
+	    if (r1.obj) {
+		if (!(r1.dist >= min && r1.dist < max))
+		    r1 = {obj:NULL, dist:0};
+	    }
 	    if (SELF.right) {
 		var r2 = Surface.intersect(SELF.right, eye, ray, min, max);
-		if (r2.dist < r1.dist)
-		    return r2;
+		if (r2.obj && r2.dist >= min && r2.dist < max) {
+		    if (!r1.obj || r2.dist < r1.dist)
+			return r2;
+		}
 	    }
 	    return r1;
 	}
-	return {obj:NULL, dist:SENTINEL};
+	return {obj:NULL, dist:0};
     }
 
     @virtual bounds(SELF) {
@@ -148,12 +193,14 @@ function makeMaterial(diffuse, specular, shininess, ambient, mirror) {
 		 zmin: SELF.zmin, zmax: SELF.zmax };
     }
 
-    @virtual debug(SELF, print) {
+    @virtual debug(SELF, print, level) {
 	print("[");
-	Surface.debug(SELF.left);
+	Surface.debug(SELF.left, print, level+1);
 	if (SELF.right) {
-	    print(",");
-	    Surface.debug(SELF.right);
+	    print(",\n");
+	    for ( var i=0 ; i < level ; i++ )
+		print(" ");
+	    Surface.debug(SELF.right, print, level+1);
 	}
 	print("]");
     }
@@ -211,6 +258,7 @@ function makeMaterial(diffuse, specular, shininess, ambient, mirror) {
     }
 
     @virtual intersect(SELF, eye, ray, min, max) {
+	//g_sphereintersect++;
 	var DdotD = dot(ray, ray);
 	var EminusC = subvref(eye, SELF.center0.ref);
 	var B = dot(ray, EminusC);
@@ -244,7 +292,7 @@ function makeMaterial(diffuse, specular, shininess, ambient, mirror) {
 	return SELF.center0;
     }
 
-    @virtual debug(SELF, print) {
+    @virtual debug(SELF, print, level) {
 	print("(S c=" + SELF.center0 + " r=" + SELF.radius + ")");
     }
 } @end
@@ -312,7 +360,7 @@ function makeMaterial(diffuse, specular, shininess, ambient, mirror) {
 		   (SELF.v1.z + SELF.v2.z + SELF.v3.z)/3);
     }
 
-    @virtual debug(SELF, print) {
+    @virtual debug(SELF, print, level) {
 	print("(T)");
     }
 } @end
