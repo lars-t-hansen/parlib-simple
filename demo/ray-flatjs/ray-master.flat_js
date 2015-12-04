@@ -56,7 +56,7 @@ function main() {
 	var id  = cx.createImageData(g_width, g_height);
 	id.data.set(new Uint8Array(RAW_MEMORY, Bitmap.data(bits), g_width*g_height*4));
 	cx.putImageData(id, 0, 0);
-	document.getElementById("mycaption").innerHTML = "Time=" + (now - then) + "ms";
+	document.getElementById("mycaption").innerHTML = "Workers=" + numWorkers + ".  Time=" + (now - then) + "ms";
     }
 }
 
@@ -124,16 +124,15 @@ function setStage() {
     if (debug)
 	console.log("Setstage end");
 
-    // Create bounding volume hierarchy here, and use that for the Scene.  Scene goes away, I think.
+    // Create bounding volume hierarchy here.  This reduces rendering
+    // time by more than 50% (on first attempt).
 
     return [eye, light, background, partition(world, computeBounds(world), 0)];
 }
 
 function partition(surfaces, bounds, axis) {
-    //console.log("Surfaces: " + surfaces.length + " axis: " + axis);
     var left=null, right=null;
     var { xmin, xmax, ymin, ymax, zmin, zmax } = bounds;
-    //console.log("Bounds: " + xmin + " " + xmax + " " + ymin + " " + ymax + " " + zmin + " " + zmax);
     if (surfaces.length == 1) {
 	left = surfaces[0];
 	right = null;
@@ -161,7 +160,6 @@ function partition(surfaces, bounds, axis) {
 		mid = (zmax + zmin) / 2;
 		center = (s) => Surface.center(s).z
 	    }
-	    //console.log("Mid=" + mid);
 	    var lobj = [];
 	    var robj = [];
 	    for ( var i=0 ; i < surfaces.length ; i++ ) {

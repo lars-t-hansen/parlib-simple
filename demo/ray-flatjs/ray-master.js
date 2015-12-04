@@ -57,7 +57,7 @@ function main() {
 	var id  = cx.createImageData(g_width, g_height);
 	id.data.set(new Uint8Array(RAW_MEMORY, _mem_int32[(bits + 4) >> 2], g_width*g_height*4));
 	cx.putImageData(id, 0, 0);
-	document.getElementById("mycaption").innerHTML = "Time=" + (now - then) + "ms";
+	document.getElementById("mycaption").innerHTML = "Workers=" + numWorkers + ".  Time=" + (now - then) + "ms";
     }
 }
 
@@ -71,8 +71,8 @@ const blue = DL3(0.0, 0.0, 1.0);
 
 // Not restricted to a rectangle, actually
 function rectangle(world, m, v1, v2, v3, v4) {
-    world.push(Triangle.init(Triangle.initInstance(FlatJS.allocOrThrow(168,8)), m, v1, v2, v3));
-    world.push(Triangle.init(Triangle.initInstance(FlatJS.allocOrThrow(168,8)), m, v1, v3, v4));
+    world.push(Triangle.init(Triangle.initInstance(FlatJS.allocOrThrow(192,8)), m, v1, v2, v3));
+    world.push(Triangle.init(Triangle.initInstance(FlatJS.allocOrThrow(192,8)), m, v1, v3, v4));
 }
 
 // Vertices are for front and back faces, both counterclockwise as seen
@@ -106,8 +106,8 @@ function setStage() {
 
     world.push(Sphere.init(Sphere.initInstance(FlatJS.allocOrThrow(128,8)), m1, DL3(-1, 1, -9), 1));
     world.push(Sphere.init(Sphere.initInstance(FlatJS.allocOrThrow(128,8)), m2, DL3(1.5, 1, 0), 0.75));
-    world.push(Triangle.init(Triangle.initInstance(FlatJS.allocOrThrow(168,8)), m1, DL3(-1,0,0.75), DL3(-0.75,0,0), DL3(-0.75,1.5,0)));
-    world.push(Triangle.init(Triangle.initInstance(FlatJS.allocOrThrow(168,8)), m3, DL3(-2,0,0), DL3(-0.5,0,0), DL3(-0.5,2,0)));
+    world.push(Triangle.init(Triangle.initInstance(FlatJS.allocOrThrow(192,8)), m1, DL3(-1,0,0.75), DL3(-0.75,0,0), DL3(-0.75,1.5,0)));
+    world.push(Triangle.init(Triangle.initInstance(FlatJS.allocOrThrow(192,8)), m3, DL3(-2,0,0), DL3(-0.5,0,0), DL3(-0.5,2,0)));
     rectangle(world, m4, DL3(-5,0,5), DL3(5,0,5), DL3(5,0,-40), DL3(-5,0,-40));
     cube(world, m5, DL3(1, 1.5, 1.5), DL3(1.5, 1.5, 1.25), DL3(1.5, 1.75, 1.25), DL3(1, 1.75, 1.5),
 	 DL3(1.5, 1.5, 0.5), DL3(1, 1.5, 0.75), DL3(1, 1.75, 0.75), DL3(1.5, 1.75, 0.5));
@@ -125,16 +125,15 @@ function setStage() {
     if (debug)
 	console.log("Setstage end");
 
-    // Create bounding volume hierarchy here, and use that for the Scene.  Scene goes away, I think.
+    // Create bounding volume hierarchy here.  This reduces rendering
+    // time by more than 50% (on first attempt).
 
     return [eye, light, background, partition(world, computeBounds(world), 0)];
 }
 
 function partition(surfaces, bounds, axis) {
-    //console.log("Surfaces: " + surfaces.length + " axis: " + axis);
     var left=null, right=null;
     var { xmin, xmax, ymin, ymax, zmin, zmax } = bounds;
-    //console.log("Bounds: " + xmin + " " + xmax + " " + ymin + " " + ymax + " " + zmin + " " + zmax);
     if (surfaces.length == 1) {
 	left = surfaces[0];
 	right = null;
@@ -162,7 +161,6 @@ function partition(surfaces, bounds, axis) {
 		mid = (zmax + zmin) / 2;
 		center = (s) => Surface.center(s).z
 	    }
-	    //console.log("Mid=" + mid);
 	    var lobj = [];
 	    var robj = [];
 	    for ( var i=0 ; i < surfaces.length ; i++ ) {

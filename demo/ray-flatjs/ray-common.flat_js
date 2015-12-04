@@ -22,8 +22,6 @@ const g_right = 2;
 const g_top = 1.5;
 const g_bottom = -1.5;
 
-var g_volintersect = 0;
-
 // END CONFIGURATION
 
 const debug = false;		// Progress printout, may confuse the consumer
@@ -39,6 +37,7 @@ function sub(a, b) { return DL3(a.x-b.x, a.y-b.y, a.z-b.z); }
 function subi(a, c) { return DL3(a.x-c, a.y-c, a.z-c); }
 function muli(a, c) { return DL3(a.x*c, a.y*c, a.z*c); }
 function divi(a, c) { return DL3(a.x/c, a.y/c, a.z/c); }
+function inv(a) { return DL3(1/a.x, 1/a.y, 1/a.z); }
 function neg(a) { return DL3(-a.x, -a.y, -a.z); }
 function length(a) { return Math.sqrt(a.x*a.x + a.y*a.y + a.z*a.z); }
 function normalize(a) { var d = length(a); return DL3(a.x/d, a.y/d, a.z/d); }
@@ -107,6 +106,8 @@ function makeMaterial(diffuse, specular, shininess, ambient, mirror) {
     }
 } @end
 
+var NO_HIT = {obj:NULL, dist:0};
+
 @flatjs class Volume extends Surface {
     xmin: float64
     xmax: float64
@@ -130,16 +131,16 @@ function makeMaterial(diffuse, specular, shininess, ambient, mirror) {
     }
 
     @virtual intersect(SELF, eye, ray, min, max) {
-	//g_volintersect++;
-	var txmin, txmax, tymin, tymax, tzmin, tzmax;
+	"use strict";
+	var tmin = 0, tmax = 0, tymin = 0, tymax = 0, tzmin = 0, tzmax = 0;
 	var a = 1/ray.x;
 	if (a >= 0) {
-	    txmin = (SELF.xmin - eye.x)*a;
-	    txmax = (SELF.xmax - eye.x)*a;
+	    tmin = (SELF.xmin - eye.x)*a;
+	    tmax = (SELF.xmax - eye.x)*a;
 	}
 	else {
-	    txmin = (SELF.xmax - eye.x)*a;
-	    txmax = (SELF.xmin - eye.x)*a;
+	    tmin = (SELF.xmax - eye.x)*a;
+	    tmax = (SELF.xmin - eye.x)*a;
 	}
 	var a = 1/ray.y;
 	if (a >= 0) {
@@ -150,6 +151,12 @@ function makeMaterial(diffuse, specular, shininess, ambient, mirror) {
 	    tymin = (SELF.ymax - eye.y)*a;
 	    tymax = (SELF.ymin - eye.y)*a;
 	}
+	if (tmin > tymax || tymin > tmax)
+	    return NO_HIT;
+	if (tymin > tmin)
+	    tmin = tymin;
+	if (tymax < tmax)
+	    tmax = tymax;
 	var a = 1/ray.z;
 	if (a >= 0) {
 	    tzmin = (SELF.zmin - eye.z)*a;
@@ -159,32 +166,23 @@ function makeMaterial(diffuse, specular, shininess, ambient, mirror) {
 	    tzmin = (SELF.zmax - eye.z)*a;
 	    tzmax = (SELF.zmin - eye.z)*a;
 	}
-	// Intersects if they all pairwise intersect
-	// var intersects = (!((txmin > tymax) || (tymin > txmax)) ||
-	// 		  !((txmin > tzmax) || (tzmin > txmax)) ||
-	// 		  !((tymin > tzmax) || (tzmin > tymax)));
-	var intersects = ((txmin > SELF.xmin && txmin < SELF.xmax || txmax > SELF.xmin && txmax < SELF.xmax) &&
-			  (tymin > SELF.ymin && tymin < SELF.ymax || tymax > SELF.ymin && tymax < SELF.ymax) &&
-			  (tzmin > SELF.zmin && tzmin < SELF.zmax || tzmax > SELF.zmin && tzmax < SELF.zmax));
-	// TODO:
-	// Does this not work because the computations above are not correct
-	// or because the bounding box values are not correct?
-	if (intersects) {
-	    var r1 = Surface.intersect(SELF.left, eye, ray, min, max);
-	    if (r1.obj) {
-		if (!(r1.dist >= min && r1.dist < max))
-		    r1 = {obj:NULL, dist:0};
-	    }
-	    if (SELF.right) {
-		var r2 = Surface.intersect(SELF.right, eye, ray, min, max);
-		if (r2.obj && r2.dist >= min && r2.dist < max) {
-		    if (!r1.obj || r2.dist < r1.dist)
-			return r2;
-		}
-	    }
-	    return r1;
+	if (tmin > tzmax || tzmin > tmax)
+	    return NO_HIT;
+	if (tzmin > tmin)
+	    tmin = tzmin;
+	if (tzmax < tmax)
+	    tmax = tzmax;
+
+	if (!(tmin < max && tmax > min))
+	    return NO_HIT;
+
+	var r1 = Surface.intersect(SELF.left, eye, ray, min, max);
+	if (SELF.right) {
+	    var r2 = Surface.intersect(SELF.right, eye, ray, min, max);
+	    if (r2.obj && (!r1.obj || r2.dist < r1.dist))
+		return r2;
 	}
-	return {obj:NULL, dist:0};
+	return r1;
     }
 
     @virtual bounds(SELF) {
@@ -206,46 +204,6 @@ function makeMaterial(diffuse, specular, shininess, ambient, mirror) {
     }
 } @end
 
-// Scene goes away, I think.
-
-@flatjs class Scene extends Surface {
-    length: int32
-    objects: Surface.Array
-
-    @method init(SELF, objects) {
-	var len = objects.length;
-	SELF.length = len;
-	var objs = @new Surface.Array(len);
-	for ( var i=0 ; i < len ; i++ )
-	    Surface.Array.setAt(objs, i, objects[i]);
-	SELF.objects = objs;
-	return SELF;
-    }
-
-    @virtual intersect(SELF, eye, ray, min, max) {
-	var min_obj = NULL;
-	var min_dist = SENTINEL;
-
-	var objs = SELF.objects;
-	for ( var idx=0, limit=SELF.length ; idx < limit ; idx++ ) {
-	    var surf = Surface.Array.at(objs, idx);
-	    var tmp = Surface.intersect(surf, eye, ray, min, max);
-	    var obj = tmp.obj;
-	    var dist = tmp.dist;
-	    if (obj) {
-		if (dist >= min && dist < max) {
-		    if (dist < min_dist) {
-			min_obj = obj;
-			min_dist = dist;
-		    }
-		}
-	    }
-	}
-	return {obj:min_obj, dist:min_dist};
-    }
-
-} @end
-
 @flatjs class Sphere extends Surface {
     center0: Vec3
     radius: float64
@@ -258,13 +216,12 @@ function makeMaterial(diffuse, specular, shininess, ambient, mirror) {
     }
 
     @virtual intersect(SELF, eye, ray, min, max) {
-	//g_sphereintersect++;
 	var DdotD = dot(ray, ray);
 	var EminusC = subvref(eye, SELF.center0.ref);
 	var B = dot(ray, EminusC);
 	var disc = B*B - DdotD*(dot(EminusC,EminusC) - SELF.radius*SELF.radius);
 	if (disc < 0.0)
-	    return {obj:NULL, dist:0};
+	    return NO_HIT;
 	var s1 = (-B + Math.sqrt(disc))/DdotD;
 	var s2 = (-B - Math.sqrt(disc))/DdotD;
 	// Here return the smallest of s1 and s2 after filtering for _min and _max
@@ -274,7 +231,7 @@ function makeMaterial(diffuse, specular, shininess, ambient, mirror) {
 	    s2 = SENTINEL;
 	var _dist = Math.min(s1,s2);
 	if (_dist == SENTINEL)
-	    return {obj:NULL, dist:0};
+	    return NO_HIT;
 	return {obj:SELF, dist:_dist};
     }
 
@@ -301,12 +258,14 @@ function makeMaterial(diffuse, specular, shininess, ambient, mirror) {
     v1: Vec3
     v2: Vec3
     v3: Vec3
+    norm: Vec3
 
     @method init(SELF, material, v1, v2, v3) {
 	Surface.init(SELF, material)
 	SELF.v1 = v1;
 	SELF.v2 = v2;
 	SELF.v3 = v3;
+	SELF.norm = normalize(cross(subrefref(SELF.v2.ref, SELF.v1.ref), subrefref(SELF.v3.ref, SELF.v1.ref)));
 	return SELF;
     }
 
@@ -330,19 +289,18 @@ function makeMaterial(diffuse, specular, shininess, ambient, mirror) {
 	var M = a*(e*i - h*f) + b*(g*f - d*i) + c*(d*h - e*g);
 	var t = -((f*(a*k - j*b) + e*(j*c - a*l) + d*(b*l - k*c))/M);
 	if (t < min || t > max)
-	    return {obj:NULL,dist:0};
+	    return NO_HIT;
 	var gamma = (i*(a*k - j*b) + h*(j*c - a*l) + g*(b*l - k*c))/M;
 	if (gamma < 0 || gamma > 1.0)
-	    return {obj:NULL,dist:0};
+	    return NO_HIT;
 	var beta = (j*(e*i - h*f) + k*(g*f - d*i) + l*(d*h - e*g))/M;
 	if (beta < 0.0 || beta > 1.0 - gamma)
-	    return {obj:NULL,dist:0};
+	    return NO_HIT;
 	return {obj:SELF, dist:t};
     }
 
     @virtual normal(SELF, p) {
-	// TODO: Observe that the normal is invariant and can be stored with the triangle
-	return normalize(cross(subrefref(SELF.v2.ref, SELF.v1.ref), subrefref(SELF.v3.ref, SELF.v1.ref)));
+	return SELF.norm;
     }
 
     @virtual bounds(SELF) {
