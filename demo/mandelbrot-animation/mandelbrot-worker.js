@@ -12,8 +12,8 @@ importScripts("../../src/asymmetric-barrier.js",
 onmessage =
     function (ev) {
 	var [sab, intByteOffset, intLength, floByteOffset, floLength, barrierID, barrierLoc, magnificationLoc, ybase, ylimit] = ev.data;
-	var intmem = new SharedInt32Array(sab, intByteOffset, intLength);
-	var flomem = new SharedFloat64Array(sab, floByteOffset, floLength);
+	var intmem = new Int32Array(sab, intByteOffset, intLength);
+	var flomem = new Float64Array(sab, floByteOffset, floLength);
 	var barrier = new WorkerBarrier(intmem, barrierLoc, barrierID);
 
 	barrier.enter();

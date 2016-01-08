@@ -18,8 +18,8 @@ function int64Ref(ia, x) {
     return {hi: int64RefHi(ia, x), lo: int64RefLo(ia, x) };
 }
 
-var xx = new SharedInt32Array(Atomics.NUMI64INTS);
-var ia = new SharedInt32Array(10);
+var xx = new Int32Array(new SharedArrayBuffer(Atomics.NUMI64INTS*Int32Array.BYTES_PER_ELEMENT));
+var ia = new Int32Array(new SharedArrayBuffer(10*Int32Array.BYTES_PER_ELEMENT));
 
 Atomics.int64Init(xx, 0);
 

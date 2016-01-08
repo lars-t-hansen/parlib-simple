@@ -130,7 +130,7 @@ print("Waited (B) " + (Date.now() - then) + " (should be approx 1000ms)");
 function memset(sab, offset, val, len) {
     if (len == 0)
 	return;
-    var mem = new SharedInt8Array(sab, offset, len);
+    var mem = new Int8Array(sab, offset, len);
     for ( var i=0 ; i < len-1 ; i++ )
 	mem[i] = val;
     // Publish those values

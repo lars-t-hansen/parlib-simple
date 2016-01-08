@@ -39,7 +39,7 @@
 
 // Create a MasterPar object.
 //
-// 'iab' is a SharedInt32Array.
+// 'iab' is a Int32Array on shared memory.
 // 'ibase' is the first of MasterPar.NUMINTS locations in iab reserved
 //    for the Par system.
 // 'numWorkers' must be a positive integer, the number of workers in
@@ -165,7 +165,7 @@ const _PAR_MSGLOOPEXIT = 3;
 // indexSpace is an array of length-2 arrays determining the index
 //   space of the computation; workers will be invoked on subvolumes
 //   of this space in an unpredictable order.
-// The ...args can be SharedTypedArray, SharedArrayBuffer, number,
+// The ...args can be TypedArray, SharedArrayBuffer, number,
 //   bool, string, undefined, or null values and will be marshalled
 //   and passed as arguments to the user function on the worker side.
 //
@@ -459,7 +459,7 @@ const _Par_global = this;
 WorkerPar.prototype._initialize =
     function (message) {
 	var [_, sab, byteOffset, identity, barrierLoc, barrierID, opLoc, funcLoc, sizeLoc, nextLoc, limLoc, nextArgLoc, argLimLoc] = message;
-	this.iab = new SharedInt32Array(sab, byteOffset);
+	this.iab = new Int32Array(sab, byteOffset);
 	this._barrier = new WorkerBarrier(this.iab, barrierLoc, barrierID);
 	this._identity = identity;
 	this._opLoc = opLoc;

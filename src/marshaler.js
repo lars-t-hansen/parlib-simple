@@ -19,7 +19,7 @@
 //  - number
 //  - string
 //  - SharedArrayBuffer
-//  - SharedTypedArray
+//  - TypedArray on ArrayBuffer and SharedArrayBuffer
 //  - Array
 //  - ArrayBuffer
 //  - TypedArray
@@ -136,9 +136,9 @@ const _MARSHAL_TAG_F64 = 9;
 // that reference those objects.  (Such transmission is only possible
 // via the message loop.)
 //
-// SharedArrayBuffers (but not SharedTypedArrays) that are marshaled
-// several times from the same marshaling object to the same
-// unmarshaling object will unmarshal as identical objects.
+// SharedArrayBuffers that are marshaled several times from the same
+// marshaling object to the same unmarshaling object will unmarshal as
+// identical objects.
 //
 // The array of int32 values has no header: two such arrays can be
 // catenated and still represent a valid sequence of marshaled values.
@@ -241,7 +241,9 @@ Marshaler.prototype.marshal =
 	    else if (v instanceof Float64Array)
 		header = (_MARSHAL_TAG_F64 << 8) | _MARSHAL_TA;
 
-	    if (v instanceof ArrayBuffer || header != 0) {
+	    // TA on SharedArrayBuffer is handled below, for the time being.
+
+	    if (v instanceof ArrayBuffer || (header != 0 && !(v.buffer instanceof SharedArrayBuffer))) {
 		// One can optimize this if the payload length is
 		// divisible by 4 and starts on a 4-byte boundary.
 		var tmp;
@@ -274,24 +276,26 @@ Marshaler.prototype.marshal =
 		return;
 	    }
 
+	    // This handles TA on SharedArrayBuffer, TA on ArrayBuffer was handled above.
+
 	    var header = 0;
-	    if (v instanceof SharedInt8Array)
+	    if (v instanceof Int8Array)
 		header = (_MARSHAL_TAG_I8 << 8) | _MARSHAL_STA;
-	    else if (v instanceof SharedUint8Array)
+	    else if (v instanceof Uint8Array)
 		header = (_MARSHAL_TAG_U8 << 8) | _MARSHAL_STA;
-	    else if (v instanceof SharedUint8ClampedArray)
+	    else if (v instanceof Uint8ClampedArray)
 		header = (_MARSHAL_TAG_CU8 << 8) | _MARSHAL_STA;
-	    else if (v instanceof SharedInt16Array)
+	    else if (v instanceof Int16Array)
 		header = (_MARSHAL_TAG_I16 << 8) | _MARSHAL_STA;
-	    else if (v instanceof SharedUint16Array)
+	    else if (v instanceof Uint16Array)
 		header = (_MARSHAL_TAG_U16 << 8) | _MARSHAL_STA;
-	    else if (v instanceof SharedInt32Array)
+	    else if (v instanceof Int32Array)
 		header = (_MARSHAL_TAG_I32 << 8) | _MARSHAL_STA;
-	    else if (v instanceof SharedUint32Array)
+	    else if (v instanceof Uint32Array)
 		header = (_MARSHAL_TAG_U32 << 8) | _MARSHAL_STA;
-	    else if (v instanceof SharedFloat32Array)
+	    else if (v instanceof Float32Array)
 		header = (_MARSHAL_TAG_F32 << 8) | _MARSHAL_STA;
-	    else if (v instanceof SharedFloat64Array)
+	    else if (v instanceof Float64Array)
 		header = (_MARSHAL_TAG_F64 << 8) | _MARSHAL_STA;
 
 	    if (header != 0) {
@@ -461,20 +465,20 @@ Marshaler.prototype.unmarshal =
 		check(3);
 		var sab = self._knownSAB[M[index++]];
 		if (!sab)
-		    throw new Error("Unknown (unregistered?) SharedArrayBuffer for SharedTypedArray in unmarshaling");
+		    throw new Error("Unknown (unregistered?) SharedArrayBuffer for TypedArray in unmarshaling");
 		var byteOffset = M[index++];
 		var length = M[index++];
 		switch (tag >> 8) {
-		case _MARSHAL_TAG_I8:  return new SharedInt8Array(sab, byteOffset, length);
-		case _MARSHAL_TAG_U8:  return new SharedUint8Array(sab, byteOffset, length);
-		case _MARSHAL_TAG_CU8: return new SharedUint8ClampedArray(sab, byteOffset, length);
-		case _MARSHAL_TAG_I16: return new SharedInt16Array(sab, byteOffset, length);
-		case _MARSHAL_TAG_U16: return new SharedUint16Array(sab, byteOffset, length);
-		case _MARSHAL_TAG_I32: return new SharedInt32Array(sab, byteOffset, length);
-		case _MARSHAL_TAG_U32: return new SharedUint32Array(sab, byteOffset, length);
-		case _MARSHAL_TAG_F32: return new SharedFloat32Array(sab, byteOffset, length);
-		case _MARSHAL_TAG_F64: return new SharedFloat64Array(sab, byteOffset, length);
-		default: throw new Error("Bad SharedTypedArray typetag: " + (tag >> 8).toString(16));
+		case _MARSHAL_TAG_I8:  return new Int8Array(sab, byteOffset, length);
+		case _MARSHAL_TAG_U8:  return new Uint8Array(sab, byteOffset, length);
+		case _MARSHAL_TAG_CU8: return new Uint8ClampedArray(sab, byteOffset, length);
+		case _MARSHAL_TAG_I16: return new Int16Array(sab, byteOffset, length);
+		case _MARSHAL_TAG_U16: return new Uint16Array(sab, byteOffset, length);
+		case _MARSHAL_TAG_I32: return new Int32Array(sab, byteOffset, length);
+		case _MARSHAL_TAG_U32: return new Uint32Array(sab, byteOffset, length);
+		case _MARSHAL_TAG_F32: return new Float32Array(sab, byteOffset, length);
+		case _MARSHAL_TAG_F64: return new Float64Array(sab, byteOffset, length);
+		default: throw new Error("Bad TypedArray typetag: " + (tag >> 8).toString(16));
 		}
 	    case _MARSHAL_BOOL:
 		return !!(tag >> 8);

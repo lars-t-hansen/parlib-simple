@@ -11,7 +11,7 @@ var DEBUG = true;
 onmessage =
     function (ev) {
         var [sab, bufIdx, bufSize, availIdx, leftIdx, rightIdx, lockIdx, nonfullIdx, nonemptyIdx, numElem, numWorkers, myID] = ev.data;
-        var iab = new SharedInt32Array(sab);
+        var iab = new Int32Array(sab);
         var lock = new Lock(iab, lockIdx);
         var nonfull = new Cond(lock, nonfullIdx);
         var nonempty = new Cond(lock, nonemptyIdx);

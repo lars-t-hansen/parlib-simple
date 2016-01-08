@@ -31,8 +31,8 @@ var addend = 1;
 var expected = 0;
 
 const sab = new SharedArrayBuffer(alloc);
-const iab = new SharedInt32Array(sab);
-const dab = new SharedFloat64Array(sab);
+const iab = new Int32Array(sab);
+const dab = new Float64Array(sab);
 const barrier = new MasterBarrier(iab, barrierIdx, barrierID, numWorkers, barrierReady);
 
 function runTest() {

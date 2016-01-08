@@ -11,7 +11,7 @@ onmessage =
 	// Initialize our state
 
 	var s = new SynchronicInt32(sab, 0);
-	var iab = new SharedInt32Array(sab, locIdx, 1);
+	var iab = new Int32Array(sab, locIdx, 1);
 
 	// Let the master know we're ready to go
 

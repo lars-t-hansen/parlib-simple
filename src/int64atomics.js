@@ -51,12 +51,12 @@ if (!Atomics.hasOwnProperty("int64Init")) {
 	var iidx = 0;
 	var stash = 0;
 
-	// int64Init must be called one with a SharedInt32Array and an
-	// index within that array that represents the start of a range of
-	// Atomics.NUMI64INTS integers.  The shared memory locations
-	// denoted by those values should be the same in all agents, and
-	// they must be initialized to zero before the first such call is
-	// made.
+	// int64Init must be called once with a Int32Array and an
+	// index within that array that represents the start of a
+	// range of Atomics.NUMI64INTS integers.  The shared memory
+	// locations denoted by those values should be the same in all
+	// agents, and they must be initialized to zero before the
+	// first such call is made.
 
 	Atomics.int64Init = function (iab_, iidx_) {
 	    iab = iab_;

@@ -31,8 +31,8 @@ Function.prototype.toMarshaled =
 
 var s1 = new SharedArrayBuffer(100);
 var s2 = new SharedArrayBuffer(200);
-var i1 = new SharedInt32Array(s1, 20, 5);
-var f1 = new SharedFloat64Array(s2, 8, 20);
+var i1 = new Int32Array(s1, 20, 5);
+var f1 = new Float64Array(s2, 8, 20);
 var ab = new ArrayBuffer(20);
 var tmp = new Uint8Array(ab);
 for ( var i=0 ; i < tmp.length ; i++ )
@@ -77,8 +77,8 @@ for ( var i=0 ; i < 8 ; i++ )
 assertEq(t2[8] instanceof SharedArrayBuffer, true);
 assertEq(t2[9] instanceof SharedArrayBuffer, true);
 assertEq(t2[10] instanceof SharedArrayBuffer, true);
-assertEq(t2[11] instanceof SharedInt32Array, true);
-assertEq(t2[12] instanceof SharedFloat64Array, true);
+assertEq(t2[11] instanceof Int32Array, true);
+assertEq(t2[12] instanceof Float64Array, true);
 assertEq(t2[8], t2[9]);
 assertEq(t2[8].byteLength, t2[8].byteLength);
 

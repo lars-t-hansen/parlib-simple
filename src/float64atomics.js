@@ -2,12 +2,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// Atomic operations on SharedFloat64Array.
+// Atomic operations on Float64Array on SharedArrayBuffer.
 //
-// The regular Atomics object does not (yet) provide atomic operations
-// on SharedFloat64Array because not all plausible hardware can
-// provide 8-byte atomic operations (ARMv6, MIPS32).  That will
-// change.  In the mean time, we have this.
+// The regular Atomics object does not provide atomic operations on
+// Float64Array because not all plausible hardware can provide 8-byte
+// atomic operations (ARMv6, MIPS32).
 //
 // This polyfill provides these operations:
 //
@@ -56,12 +55,12 @@ if (!Atomics.hasOwnProperty("float64Init")) {
 	var _f64tmp = new Float64Array(2);
 	var _i32tmp = new Int32Array(_f64tmp.buffer);
 
-	// float64Init must be called one with a SharedInt32Array and an
-	// index within that array that represents the start of a range of
-	// Atomics.NUMF64INTS integers.  The shared memory locations
-	// denoted by those values should be the same in all agents, and
-	// they must be initialized to zero before the first such call is
-	// made.
+	// float64Init must be called once with a Int32Array and an
+	// index within that array that represents the start of a
+	// range of Atomics.NUMF64INTS integers.  The shared memory
+	// locations denoted by those values should be the same in all
+	// agents, and they must be initialized to zero before the
+	// first such call is made.
 
 	Atomics.float64Init = function (iab_, iidx_) {
 	    iab = iab_;

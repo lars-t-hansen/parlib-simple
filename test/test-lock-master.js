@@ -29,7 +29,7 @@ var lock;
 var nonfull;
 var nonempty;
 
-var iab = new SharedInt32Array(iabSize);
+var iab = new Int32Array(new SharedArrayBuffer(iabSize*Int32Array.BYTES_PER_ELEMENT));
 Lock.initialize(iab, lockIdx);
 Cond.initialize(iab, nonfullIdx);
 Cond.initialize(iab, nonemptyIdx);
