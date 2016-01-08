@@ -69,10 +69,73 @@ const yellow = DL3(1.0, 1.0, 0.0);
 const red = DL3(1.0, 0.0, 0.0);
 const blue = DL3(0.0, 0.0, 1.0);
 
+function sphere(world, m, center, radius) {
+    world.push(Sphere.init(Sphere.initInstance(FlatJS.allocOrThrow(128,8)), m, center, radius));
+}
+
+var splits = 0;
+var level = 0;
+
+// Triangle with edges v1 -> v2, v2 -> v3, v3 -> v1
+function triangle(world, m, v1, v2, v3) {
+    // If the triangle is "large", divide it to improve performance
+    // with BVH.  Use the circumference as a proxy for size, and split
+    // along the middle of the longest edge.
+    level++;
+    const TRIANGLE_CUTOFF = 0.5;  // Hacky
+    //console.log(sub(v2, v1).toSource() + " " + v1.toSource() + " " + v2.toSource());
+    var l1 = length(sub(v2, v1)); // v1 -> v2
+    var l2 = length(sub(v3, v2)); // v2 -> v3
+    var l3 = length(sub(v1, v3)); // v3 -> v1
+    var c = l1 + l2 + l3;
+    //console.log("Level " + level + " " + l1 + " " + l2 + " " + l3);
+    // This does not work.
+    if (false && level < 3 && c >= TRIANGLE_CUTOFF) {
+	//console.log("Splitting: " + c);
+	if (l1 > l2) {
+	    // l1 > l2
+	    if (l3 > l1) {
+		// l3 largest so split v3 -> v1
+		let mid = add(v3, divi(sub(v3, v1), 2));
+		//console.log(v3.toSource() + " " + v1.toSource() + " " + mid.toSource());
+		triangle(world, m, v1, v2, mid);
+		triangle(world, m, mid, v2, v3);
+	    }
+	    else {
+		// l1 largest
+		let mid = add(v1, divi(sub(v2, v1), 2));
+		//console.log(v1.toSource() + " " + v2.toSource() + " " + mid.toSource());
+		triangle(world, m, v1, mid, v3);
+		triangle(world, m, mid, v2, v3);
+	    }
+	}
+	else {
+	    // l2 >= l1
+	    if (l3 > l2) {
+		// l3 largest
+		let mid = add(v3, divi(sub(v3, v1), 2));
+		//console.log(v3.toSource() + " " + v1.toSource() + " " + mid.toSource());
+		triangle(world, m, v1, v2, mid);
+		triangle(world, m, mid, v2, v3);
+	    }
+	    else {
+		// l2 largest
+		let mid = add(v2, divi(sub(v3, v2), 2));
+		//console.log(v2.toSource() + " " + v3.toSource() + " " + mid.toSource());
+		triangle(world, m, v1, v2, mid);
+		triangle(world, m, mid, v3, v1);
+	    }
+	}
+    }
+    else
+	world.push(Triangle.init(Triangle.initInstance(FlatJS.allocOrThrow(192,8)), m, v1, v2, v3));
+    level--;
+}
+
 // Not restricted to a rectangle, actually
 function rectangle(world, m, v1, v2, v3, v4) {
-    world.push(Triangle.init(Triangle.initInstance(FlatJS.allocOrThrow(192,8)), m, v1, v2, v3));
-    world.push(Triangle.init(Triangle.initInstance(FlatJS.allocOrThrow(192,8)), m, v1, v3, v4));
+    triangle(world, m, v1, v2, v3);
+    triangle(world, m, v1, v3, v4);
 }
 
 // Vertices are for front and back faces, both counterclockwise as seen
@@ -104,19 +167,22 @@ function setStage() {
 
     var world = [];
 
-    world.push(Sphere.init(Sphere.initInstance(FlatJS.allocOrThrow(128,8)), m1, DL3(-1, 1, -9), 1));
-    world.push(Sphere.init(Sphere.initInstance(FlatJS.allocOrThrow(128,8)), m2, DL3(1.5, 1, 0), 0.75));
-    world.push(Triangle.init(Triangle.initInstance(FlatJS.allocOrThrow(192,8)), m1, DL3(-1,0,0.75), DL3(-0.75,0,0), DL3(-0.75,1.5,0)));
-    world.push(Triangle.init(Triangle.initInstance(FlatJS.allocOrThrow(192,8)), m3, DL3(-2,0,0), DL3(-0.5,0,0), DL3(-0.5,2,0)));
+    sphere(world, m1, DL3(-1, 1, -9), 1);
+    sphere(world, m2, DL3(1.5, 1, 0), 0.75);
+    triangle(world, m1, DL3(-1,0,0.75), DL3(-0.75,0,0), DL3(-0.75,1.5,0));
+    triangle(world, m3, DL3(-2,0,0), DL3(-0.5,0,0), DL3(-0.5,2,0));
+    // This doubles tracing time because it is so large and ends up inside so many bounding
+    // volumes, I bet.  With bounding volumes large triangles should be split into smaller
+    // ones, and performance would generally improve (probably).  See TODO above.
     rectangle(world, m4, DL3(-5,0,5), DL3(5,0,5), DL3(5,0,-40), DL3(-5,0,-40));
     cube(world, m5, DL3(1, 1.5, 1.5), DL3(1.5, 1.5, 1.25), DL3(1.5, 1.75, 1.25), DL3(1, 1.75, 1.5),
 	 DL3(1.5, 1.5, 0.5), DL3(1, 1.5, 0.75), DL3(1, 1.75, 0.75), DL3(1.5, 1.75, 0.5));
     for ( var i=0 ; i < 30 ; i++ )
-	world.push(Sphere.init(Sphere.initInstance(FlatJS.allocOrThrow(128,8)), m6, DL3((-0.6+(i*0.2)), (0.075+(i*0.05)), (1.5-(i*Math.cos(i/30.0)*0.5))), 0.075));
+	sphere(world, m6, DL3((-0.6+(i*0.2)), (0.075+(i*0.05)), (1.5-(i*Math.cos(i/30.0)*0.5))), 0.075);
     for ( var i=0 ; i < 60 ; i++ )
-	world.push(Sphere.init(Sphere.initInstance(FlatJS.allocOrThrow(128,8)), m7, DL3((1+0.3*Math.sin(i*(3.14/16))), (0.075+(i*0.025)), (1+0.3*Math.cos(i*(3.14/16)))), 0.025));
+	sphere(world, m7, DL3((1+0.3*Math.sin(i*(3.14/16))), (0.075+(i*0.025)), (1+0.3*Math.cos(i*(3.14/16)))), 0.025);
     for ( var i=0 ; i < 60 ; i++ )
-	world.push(Sphere.init(Sphere.initInstance(FlatJS.allocOrThrow(128,8)), m8, DL3((1+0.3*Math.sin(i*(3.14/16))), (0.075+((i+8)*0.025)), (1+0.3*Math.cos(i*(3.14/16)))), 0.025));
+	sphere(world, m8, DL3((1+0.3*Math.sin(i*(3.14/16))), (0.075+((i+8)*0.025)), (1+0.3*Math.cos(i*(3.14/16)))), 0.025);
 
     var eye        = DL3(0.5, 0.75, 5);
     var light      = DL3(g_left-1, g_top, 2);
@@ -124,6 +190,8 @@ function setStage() {
 
     if (debug)
 	console.log("Setstage end");
+
+    console.log("Splits = " + splits);
 
     // Create bounding volume hierarchy here.  This reduces rendering
     // time by more than 50% (on first attempt).
@@ -146,9 +214,14 @@ function partition(surfaces, bounds, axis) {
 	var mid = 0;
 	var center;
 	var safety = 4;
+	var force = false;
 	for (;;) {
-	    if (!--safety)
-		throw new Error("Unable to partition list of length " + surfaces.length);
+	    if (!--safety) {
+		// No partitioning.  Just break ties by splitting the
+		// list in two arbitrarily.  We could do better
+		// probably.
+		force = true;
+	    }
 	    if (axis == 0) {
 		mid = (xmax + xmin) / 2;
 		center = (s) => Surface.center(s).x
@@ -172,6 +245,13 @@ function partition(surfaces, bounds, axis) {
 	    axis = (axis + 1) % 3;
 	    if (robj.length && lobj.length)
 		break;
+	    if (force) {
+		var victim = lobj.length ? lobj : robj;
+		var beneficiary = lobj.length ? robj : lobj;
+		for ( var i=0 ; i < Math.floor(victim.length)/2 ; i++ )
+		    beneficiary.push(victim.shift());
+		break;
+	    }
 	}
 	left = lobj.length == 1 ? lobj[0] : partition(lobj, computeBounds(lobj), axis);
 	right = robj.length == 1 ? robj[0] : partition(robj, computeBounds(robj), axis);

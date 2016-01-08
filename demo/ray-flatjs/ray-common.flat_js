@@ -15,7 +15,7 @@ const g_width = 800;
 const g_shadows = true;		// Compute object shadows
 const g_reflection = true;	// Compute object reflections
 const g_reflection_depth = 2;
-const g_antialias = false;	// Antialias the image (expensive but very pretty)
+const g_antialias = true;	// Antialias the image (expensive but very pretty)
 
 const g_left = -2;
 const g_right = 2;
@@ -270,10 +270,16 @@ var NO_HIT = {obj:NULL, dist:0};
     }
 
     @virtual intersect(SELF, eye, ray, min, max) {
-	// TODO: observe that values that do not depend on g, h, and i can be precomputed
-	// and stored with the triangle (for a given eye position), at some (possibly significant)
-	// space cost.  Notably the numerator of "t" is invariant, as are many factors of the
-	// numerator of "gamma".
+	// TODO: observe that values that do not depend on g, h, and i
+	// can be precomputed and stored with the triangle (for a
+	// given eye position), at some (possibly significant) space
+	// cost.  Notably the numerator of "t" is invariant, as are
+	// many factors of the numerator of "gamma".
+	//
+	// Eye changes to handle reflection, which may require
+	// recomputation - so beware of how that works in practice.
+	// It's possible there should be a dedicated "eye" cache that
+	// is only changed when the global eye position is updated.
 	var a = SELF.v1.x - SELF.v2.x;
 	var b = SELF.v1.y - SELF.v2.y;
 	var c = SELF.v1.z - SELF.v2.z;
