@@ -2,8 +2,14 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// Simple asymmetric shared cells ("synchronic").
+// Simple asymmetric "synchronics" (shared cells)
 // 2016-01-11 / lhansen@mozilla.com
+
+// Synchronics provide a simple value-signaling mechanism and are good
+// building blocks for more complex data structures.  The synchronics
+// defined here are for mainthread<->worker communication, which is
+// awkward to do because the main thread can't block; for simple
+// worker<->worker communication see synchronic.js.
 
 // There are two asymmetric-synchronic types, SynchronicMasterUpdates
 // and SynchronicWorkerUpdates (SMU and SWU for short).  In a SMU the
@@ -36,7 +42,11 @@ const _setTimeout =
        });
 
 
+//////////////////////////////////////////////////////////////////////
+//
 // SynchronicMasterUpdates.
+
+// Private constants.
 
 const _SMU_SIZE = 12;
 const _SMU_ALIGN = 4;
@@ -45,22 +55,24 @@ const _SMU_VAL = 0;
 const _SMU_NUMWAIT = 1;
 const _SMU_SEQ = 2;
 
-// Create a SynchronicMasterUpdates.
-//
-// Use the same constructor in both master and workers.  Both sides
-// must pass the same sab and offset arguments.
-//
-// "sab" is a SharedArrayBuffer.
-// "offset" is an offset within "sab" on a boundary according
-// to SynchronicMasterUpdates.BYTE_ALIGN.
-// "isMaster" must be true when the master constructs the object
-// "init" is the optional initial value for the cell
-//
-// The cell will own SynchronicMasterUpdates.BYTE_SIZE bytes within
-// "sab" starting at "offset".
-
-function SynchronicMasterUpdates(sab, offset, isMaster, init) {
+/**
+ * Create a SynchronicMasterUpdates.
+ *
+ * Use the same constructor in both master and workers.  Both sides
+ * must pass the same sab and offset arguments.
+ *
+ * - "sab" is a SharedArrayBuffer.
+ * - "offset" is an offset within "sab" on a boundary according
+ *    to SynchronicMasterUpdates.BYTE_ALIGN.
+ * - "isMaster" must be true when the master constructs the object
+ * - "init" is the optional initial value for the cell
+ *
+ * The cell will own SynchronicMasterUpdates.BYTE_SIZE bytes within
+ * "sab" starting at "offset".
+ */
+function SynchronicMasterUpdates(sab, offset, isMaster_, init) {
     let ia = new Int32Array(sab, offset, _SMU_SIZE/4);
+    let isMaster = !!isMaster_;
     if (isMaster) {
 	Atomics.store(ia, _SMU_VAL, init);
 	Atomics.store(ia, _SMU_NUMWAIT, 0);
@@ -70,17 +82,30 @@ function SynchronicMasterUpdates(sab, offset, isMaster, init) {
     this._ia = ia;
 }
 
+/**
+ * Size reserved within the SharedArrayBuffer for a
+ * SynchronicMasterUpdates object.  Will be divisible by 4.
+ */
 SynchronicMasterUpdates.BYTE_SIZE = _SMU_SIZE;
+
+/**
+ * Required alignment within the SharedArrayBuffer for a
+ * SynchronicMasterUpdates object.  Will be divisible by 4.
+ */
 SynchronicMasterUpdates.BYTE_ALIGN = _SMU_ALIGN;
 
-// Reading function - both master and worker can call this
-
+/**
+ * Atomically read the current value of the cell.  Both master and
+ * worker can call this.
+ */
 SynchronicMasterUpdates.prototype.load = function () {
     return Atomics.load(this._ia, _SMU_VAL);
 }
 
-// Updating functions - only the master can call these
-
+/**
+ * Atomically update the value of the cell to v and notify any listening
+ * workers.  Only the master can call this.
+ */
 SynchronicMasterUpdates.prototype.store = function (v) {
     this._checkAPI(true, "store");
     let val = v|0;
@@ -89,6 +114,11 @@ SynchronicMasterUpdates.prototype.store = function (v) {
     return val;
 }
 
+/**
+ * Atomically compare the value in the cell to oldv, and if they are
+ * equal store newv in the cell and notify any listening workers.
+ * Only the master can call this.
+ */
 SynchronicMasterUpdates.prototype.compareExchange = function (oldv, newv) {
     this._checkAPI(true, "compareExchange");
     let oldval = oldv|0;
@@ -99,6 +129,10 @@ SynchronicMasterUpdates.prototype.compareExchange = function (oldv, newv) {
     return result;
 }
 
+/**
+ * Atomically add v to the value of the cell and notify any listening
+ * workers.  Only the master can call this.
+ */
 SynchronicMasterUpdates.prototype.add = function (v) {
     this._checkAPI(true, "add");
     let val = v|0;
@@ -107,17 +141,23 @@ SynchronicMasterUpdates.prototype.add = function (v) {
     return result;
 }
 
+/**
+ * Notify any listening workers.  Only the master can call this.
+ */
 SynchronicMasterUpdates.prototype.notify = function () {
     this._checkAPI(true, "notify");
     this._notify();
 }
 
-// Listening functions - only the workers can call these
-
-SynchronicMasterUpdates.prototype.expectUpdate = function (v, t) {
+/**
+ * Examine the value in the cell and if it is v block until it becomes
+ * something other than v, or until the timeout t (milliseconds)
+ * expires.  Only the worker can call this.
+ */
+SynchronicMasterUpdates.prototype.expectUpdate = function (value_, timeout_) {
     this._checkAPI(false, "expectUpdate");
-    let value = v|0;
-    let timeout = +t
+    let value = value_|0;
+    let timeout = +timeout_;
     let now = _now();
     let limit = now + timeout;
     let ia = this._ia;
@@ -131,11 +171,21 @@ SynchronicMasterUpdates.prototype.expectUpdate = function (v, t) {
     }
 }
 
+/**
+ * Examine the value in the cell and if it is not v block until it
+ * becomes v.  Returns the value that was observed (ie, v, modulo
+ * conversions).  Only the worker can call this.
+ */
 SynchronicMasterUpdates.prototype.waitUntilEquals = function (v) {
     this._checkAPI(false, "waitUntilEquals");
     return this._waitOnValue(v, true);
 }
 
+/**
+ * Examine the value in the cell and if it is v block until it becomes
+ * something other than v.  Returns the value that was observed.  Only
+ * the worker can call this.
+ */
 SynchronicMasterUpdates.prototype.waitUntilNotEquals = function (v) {
     this._checkAPI(false, "waitUntilEquals");
     return this._waitOnValue(v, false);
@@ -155,14 +205,8 @@ SynchronicMasterUpdates.prototype._waitOnValue = function (v, equals) {
     for (;;) {
 	let tag = Atomics.load(ia, _SMU_SEQ);
 	v = Atomics.load(ia, _SMU_VAL) ;
-	if (equals) {
-	    if (v === value)
-		return v;
-	}
-	else {
-	    if (v !== value)
-		return v;
-	}
+	if (equals ? v === value : v !== value)
+	    return v;
 	this._waitForUpdate(tag, Number.POSITIVE_INFINITY);
     }
 }
@@ -182,17 +226,12 @@ SynchronicMasterUpdates.prototype._waitForUpdate = function (tag, timeout) {
     Atomics.sub(ia, _SMU_NUMWAIT, 1);
 }
 
-
+//////////////////////////////////////////////////////////////////////
+//
 // SynchronicWorkerUpdates.
 //
-// Usage notes:
-//
-// The event handling loop in the Master *must*, on receiving a
-// Message event, invoke SynchronicWorkerUpdates.filterEvent on that
-// event, and if that function returns true the master must not
-// process the event itself.
-//
-// [TODO: anything to be done with event cancellation?]
+
+// Private constants.
 
 const _SWU_SIZE = 12;
 const _SWU_ALIGN = 4;
@@ -206,20 +245,37 @@ const _SWU_TRANSITFLAG = 2;
 
 const _SWU_NOTIFYMSG = "SynchronicWorkerUpdate*notify";
 
-// Create a SynchronicWorkerUpdates.
-//
-// Use the same constructor in both master and workers.  Both sides
-// must pass the same sab and offset arguments.
-//
-// "sab" is a SharedArrayBuffer.
-// "offset" is an offset within "sab" on a boundary according
-// to SynchronicMasterUpdates.BYTE_ALIGN.
-// "isMaster" must be true when the master constructs the object
-// "init" is the optional initial value for the cell
-//
-// The cell will own SynchronicMasterUpdates.BYTE_SIZE bytes within
-// "sab" starting at "offset".
-
+/**
+ * Create a SynchronicWorkerUpdates.
+ *
+ * Use the same constructor in both master and workers.  Both sides
+ * must pass the same sab and offset arguments.
+ *
+ * - "sab" is a SharedArrayBuffer.
+ * - "offset" is an offset within "sab" on a boundary according
+ *   to SynchronicWorkerUpdates.BYTE_ALIGN.
+ * - "isMaster" must be true when the master constructs the object
+ * - "init" is the optional initial value for the cell
+ *
+ * The cell will own SynchronicWorkerUpdates.BYTE_SIZE bytes within
+ * "sab" starting at "offset".
+ *
+ * Important usage notes:
+ *
+ * (1) The client code in the Master MUST install an event handler for
+ * the "message" event; when that handler receives an event object
+ * "ev" it MUST call SynchronicWorkerUpdates.filterEvent(ev); if the
+ * latter function returns true the master MUST NOT process the event
+ * itself in any way.  filterEvent() will alter the event object so
+ * that it will consume it only once.
+ *
+ * (2) This SynchronicWorkerUpdates type can only have one outstanding
+ * callback at a time (per SWU object).  An event-driven master is
+ * effectively cooperatively multithreaded (and with async/await this
+ * becomes obvious), and so it would be possible for several "threads"
+ * in the master to all wait for an update to a single cell at the
+ * same time.  We disallow that, for the sake of simplicity.
+ */
 function SynchronicWorkerUpdates(sab, offset, isMaster_, init) {
     let ia = new Int32Array(sab, offset, _SWU_SIZE/4);
     let isMaster = !!isMaster_;
@@ -235,25 +291,66 @@ function SynchronicWorkerUpdates(sab, offset, isMaster_, init) {
     this._ia = ia;
 }
 
+/**
+ * Size reserved within the SharedArrayBuffer for a
+ * SynchronicWorkerUpdates object.  Will be divisible by 4.
+ */
 SynchronicWorkerUpdates.BYTE_SIZE = _SWU_SIZE;
+
+/**
+ * Required alignment within the SharedArrayBuffer for a
+ * SynchronicWorkerUpdates object.  Will be divisible by 4.
+ */
 SynchronicWorkerUpdates.BYTE_ALIGN = _SWU_ALIGN;
 
-SynchronicWorkerUpdates.TIMEDOUT = 1;
-SynchronicWorkerUpdates.IMMEDIATE = 2;
-SynchronicWorkerUpdates.DELAYED = 3;
+/**
+ * The value passed to a callback if it was invoked immediately (not
+ * delayed).  An int32 value.
+ */
+SynchronicWorkerUpdates.IMMEDIATE = -1;
 
+/**
+ * The value passed to a callback if the wait timed out.  An int32
+ * value.
+ */
+SynchronicWorkerUpdates.TIMEDOUT = -2;
+
+/**
+ * The value passed to a callback if it was not invoked immediately
+ * and did not time out.  An int32 value.
+ */
+SynchronicWorkerUpdates.DELAYED = -3;
+
+/**
+ * A function to invoke on a Message event that is received in the
+ * Master.  If this function returns true the SynchronicWorkerUpdates
+ * consumed the event and the master must ensure that its own code
+ * does not process the event.
+ */
 SynchronicWorkerUpdates.filterEvent = function (ev) {
-    if (Array.isArray(ev.data) && ev.data.length >= 2 && ev.data[0] == _SWU_NOTIFYMSG) {
+    if (Array.isArray(ev.data) && ev.data.length >= 2 && ev.data[0] === _SWU_NOTIFYMSG) {
+	ev.data[0] = "";
 	this._dispatchCallback(ev.data[1]);
 	return true;
     }
     return false;
 }
 
-// Private properties
+// Private properties and methods
 
 SynchronicWorkerUpdates._callbacks = {};
 SynchronicWorkerUpdates._idents = 1;
+
+// It is not hard to allow multiple outstanding callbacks here; we
+// would simply have a list of callbacks per ID, and when a message is
+// delivered we would unhook the list and call all the callbacks in
+// turn right here.
+//
+// However, that feature probably gets in the way of the message
+// optimization explained above _callWhenValueChanges(), below, which
+// wants there to be at most one callback.  There are probably
+// reasonable compromises for that, but that's fodder for a future
+// explanation.
 
 SynchronicWorkerUpdates._registerCallback = function(swu, cb, timeout) {
     let id = swu._id;
@@ -275,14 +372,18 @@ SynchronicWorkerUpdates._dispatchCallback = function (id) {
     cb();
 }
 
-// Reading functions - both sides
-
+/**
+ * Atomically read the current value of the cell.  Both master and
+ * worker can call this.
+ */
 SynchronicWorkerUpdates.prototype.load = function () {
     return Atomics.load(this._ia, _SWU_VAL);
 }
 
-// Updating functions - workers only
-
+/**
+ * Atomically update the value of the cell to v and notify the master
+ * if it is listening.  Only the workers can call this.
+ */
 SynchronicWorkerUpdates.prototype.store = function (v) {
     this._checkAP(false, "store");
     let val = v|0;
@@ -291,6 +392,11 @@ SynchronicWorkerUpdates.prototype.store = function (v) {
     return val;
 }
 
+/**
+ * Atomically compare the value in the cell to oldv, and if they are
+ * equal store newv in the cell and notify the master if it is
+ * listening.  Only the workers can call this.
+ */
 SynchronicWorkerUpdates.prototype.compareExchange = function (oldv, newv) {
     this._checkAPI(false, "compareExchange");
     let oldval = oldv|0;
@@ -301,6 +407,10 @@ SynchronicWorkerUpdates.prototype.compareExchange = function (oldv, newv) {
     return result;
 }
 
+/**
+ * Atomically add v to the value of the cell and notify the master if
+ * it is listening.  Only the workers can call this.
+ */
 SynchronicWorkerUpdates.prototype.add = function (v) {
     this._checkAPI(false, "add");
     let val = v|0;
@@ -309,28 +419,34 @@ SynchronicWorkerUpdates.prototype.add = function (v) {
     return result;
 }
 
+/**
+ * Notify the master if it is listening.  Only the workers can call
+ * this.
+ */
 SynchronicWorkerUpdates.prototype.notify = function () {
     this._checkAPI(false, "notify");
     this._notify();
 }
 
-// Listening functions - master only
 
-// callWhenUpdated invokes callback when the cell's value has been
-// observed to no longer be v, waiting at most t.  When the callback
-// is invoked it is invoked with one of three values: SWU.TIMEDOUT if
-// there was a timeout, SWU.DELAYED if the callback was not performed
-// immediately, and SWU.IMMEDIATE if the callback was performed
-// immediately.
-//
-// callWhenUpdated returns true if the callback was performed
-// immediately, otherwise false.
-
-SynchronicWorkerUpdates.prototype.callWhenUpdated = function (v, callback, t) {
+/**
+ * Examine the value in the cell and invoke callback when the cell
+ * value is found not to be v, or when the call times out after t
+ * milliseconds.  Only the master can call this.
+ *
+ * When the callback is invoked it is invoked with one of three
+ * values: SWU.TIMEDOUT if there was a timeout, SWU.DELAYED if the
+ * callback was not performed immediately, and SWU.IMMEDIATE if the
+ * callback was performed immediately.
+ *
+ * callWhenUpdated returns true if the callback was performed
+ * immediately, otherwise false.
+ */
+SynchronicWorkerUpdates.prototype.callWhenUpdated = function (value_, callback, timeout_) {
     this._checkAPI(true, "callWhenUpdated");
 
-    let value = v|0;
-    let timeout = +t;
+    let value = value_|0;
+    let timeout = +timeout_;
     let now = _now();
     let limit = now + timeout;
     let ia = this._ia;
@@ -357,18 +473,30 @@ SynchronicWorkerUpdates.prototype.callWhenUpdated = function (v, callback, t) {
     return check();
 }
 
-// These have the same semantics as above, apart from timeout.
-
-SynchronicMasterUpdates.prototype.callWhenEquals = function (v, callback) {
+/**
+ * Examine the value in the cell and invoke callback when the cell
+ * value is found not to be v.  Only the master can call this.
+ * Returns the value that was observed (ie, v, modulo conversions).
+ * Only the master can call this.
+ *
+ * Values passed to the callback are as for callWhenUpdated(), above.
+ */
+SynchronicWorkerUpdates.prototype.callWhenEquals = function (v, callback) {
     this._checkAPI(true, "waitUntilEquals");
     return this._callWhenValueChanges(v, callback, true);
 }
 
-SynchronicMasterUpdates.prototype.callWhenNotEquals = function (v, callback) {
+/**
+ * Examine the value in the cell and invoke callback when the cell
+ * value is found to be v.  Only the master can call this.  Returns
+ * the value that was observed.  Only the master can call this.
+ *
+ * Values passed to the callback are as for callWhenUpdated(), above.
+ */
+SynchronicWorkerUpdates.prototype.callWhenNotEquals = function (v, callback) {
     this._checkAPI(true, "waitUntilEquals");
     return this._callWhenValueChanges(v, callback, false);
 }
-
 
 // Private
 
@@ -379,10 +507,11 @@ SynchronicWorkerUpdates.prototype._checkAPI = function (requireMaster, m) {
 
 // This is the same as callWhenUpdated but arguably not very efficient
 // for signals that aren't simply 0 or 1.  It may fire off a message
-// every time an update happens, if the previous message is handled by
-// the time the next update occurs, and if the listener is waiting for
-// a counter to reach a value it may still receive a message for every
-// update even if its condition won't be met.
+// every time an update happens, if the previous message has been
+// handled in the master by the time the next worker update occurs,
+// and if the master is waiting for a counter to reach a value it may
+// receive a message for every update even if its condition won't be
+// met.
 //
 // To do better we have to store the condition for sending the message
 // (equal/not equal, and the trigger value) in the cell and have the
@@ -390,9 +519,12 @@ SynchronicWorkerUpdates.prototype._checkAPI = function (requireMaster, m) {
 // to send too many messages - the master must check the condition
 // even with that optimization - but it would reduce the number of
 // messages in the master.
+//
+// That optimization conflicts somewhat with allowing multiple master
+// "threads" to wait, see comments at _registerCallback() above.
 
-SynchronicWorkerUpdates.prototype._callWhenValueChanges = function (v, callback, equals) {
-    let value = v|0;
+SynchronicWorkerUpdates.prototype._callWhenValueChanges = function (value_, callback, equals) {
+    let value = value_|0;
     let ia = this._ia;
     let firstTime = true;
 
