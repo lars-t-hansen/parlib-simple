@@ -15,8 +15,9 @@
 // and SynchronicWorkerUpdates (SMU and SWU for short).  In a SMU the
 // master updates the cell and the the workers listens for updates; in
 // a SWU the workers update the cell and the master listens for
-// updates.  This split has been made for the sake of simplicity, in the
-// expectation that it serves realistic use cases well enough.
+// updates.  This split has been made for the sake of simplicity, in
+// the expectation that it serves realistic asymmetric use cases well
+// enough.
 //
 // This implementation supports only Int32, and it has a limited API,
 // but it generalizes.
@@ -90,7 +91,8 @@ SynchronicMasterUpdates.BYTE_SIZE = _SMU_SIZE;
 
 /**
  * Required alignment within the SharedArrayBuffer for a
- * SynchronicMasterUpdates object.  Will be divisible by 4.
+ * SynchronicMasterUpdates object.  Will be divisible by 4; will be at
+ * most 16.
  */
 SynchronicMasterUpdates.BYTE_ALIGN = _SMU_ALIGN;
 
@@ -191,6 +193,35 @@ SynchronicMasterUpdates.prototype.waitUntilNotEquals = function (v) {
     return this._waitOnValue(v, false);
 }
 
+/**
+ * (Somewhat experimental.)
+ *
+ * Update the cell from the worker without notifying anyone.  This is used
+ * to consume a value that was sent through the cell and allows the cell to
+ * be used for richer behavior.  Only the worker can call this.
+ */
+SynchronicMasterUpdates.prototype.storeNoNotify = function (v) {
+    this._checkAPI(false, "storeNoNotify");
+    let val = v|0;
+    Atomics.store(this._ia, _SMU_VAL, val);
+    return val;
+}
+
+// Ditto.
+SynchronicMasterUpdates.prototype.addNoNotify = function (v) {
+    this._checkAPI(false, "addNoNotify");
+    let val = v|0;
+    return Atomics.add(this._ia, _SMU_VAL, val);
+}
+
+// Ditto.
+SynchronicMasterUpdates.prototype.compareExchangeNoNotify = function (oldv, newv) {
+    this._checkAPI(false, "compareExchangeNoNotify");
+    let oldval = oldv|0;
+    let newval = newv|0;
+    return Atomics.compareExchange(this._ia, _SMU_VAL, oldval, newval);
+}
+
 // Private methods
 
 SynchronicMasterUpdates.prototype._checkAPI = function (requireMaster, m) {
@@ -243,7 +274,7 @@ const _SWU_ID = 2;
 const _SWU_WAITFLAG = 1;
 const _SWU_TRANSITFLAG = 2;
 
-const _SWU_NOTIFYMSG = "SynchronicWorkerUpdate*notify";
+const _SWU_NOTIFYMSG = "SynchronicWorkerUpdates*notify";
 
 /**
  * Create a SynchronicWorkerUpdates.
@@ -299,7 +330,8 @@ SynchronicWorkerUpdates.BYTE_SIZE = _SWU_SIZE;
 
 /**
  * Required alignment within the SharedArrayBuffer for a
- * SynchronicWorkerUpdates object.  Will be divisible by 4.
+ * SynchronicWorkerUpdates object.  Will be divisible by 4; will be at
+ * most 16.
  */
 SynchronicWorkerUpdates.BYTE_ALIGN = _SWU_ALIGN;
 
@@ -476,25 +508,26 @@ SynchronicWorkerUpdates.prototype.callWhenUpdated = function (value_, callback, 
 /**
  * Examine the value in the cell and invoke callback when the cell
  * value is found not to be v.  Only the master can call this.
- * Returns the value that was observed (ie, v, modulo conversions).
+ * Returns true if the callback was invoked directly, otherwise false.
  * Only the master can call this.
  *
  * Values passed to the callback are as for callWhenUpdated(), above.
  */
 SynchronicWorkerUpdates.prototype.callWhenEquals = function (v, callback) {
-    this._checkAPI(true, "waitUntilEquals");
+    this._checkAPI(true, "callWhenEquals");
     return this._callWhenValueChanges(v, callback, true);
 }
 
 /**
  * Examine the value in the cell and invoke callback when the cell
  * value is found to be v.  Only the master can call this.  Returns
- * the value that was observed.  Only the master can call this.
+ * true if the callback was invoked directly, otherwise false.  Only
+ * the master can call this.
  *
  * Values passed to the callback are as for callWhenUpdated(), above.
  */
 SynchronicWorkerUpdates.prototype.callWhenNotEquals = function (v, callback) {
-    this._checkAPI(true, "waitUntilEquals");
+    this._checkAPI(true, "callWhenNotEquals");
     return this._callWhenValueChanges(v, callback, false);
 }
 

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+</head>
+<body onload="runTest()">
+<!-- This tests master-to-master messaging -->
+<script src="scrool.js"></script>
+<script src="../src/asymmetric-synchronic-either.js"></script>
+<script>
+/**/
+onmessage = function (ev) {
+    if (AsymmetricSynchronic.filterEvent(ev))
+	return;
+    msg(ev.data);
+}
+
+var sab = new SharedArrayBuffer(256);
+var AS = new AsymmetricSynchronic(sab, 0, true);
+
+function runTest() {
+    AS.callWhenEquals(1, () => msg("A was woken up as expected, master->master messaging works"));
+    AS.callWhenEquals(1, () => msg("B was woken up as expected, master->master messaging works"));
+    msg("Waiting 2 seconds");
+    setTimeout(function () {
+	msg("storing value now, expect a wakeup message to appear below");
+	AS.store(1);
+	setTimeout(function () {
+	    msg("storing same value again, expecting nothing to happen");
+	    AS.store(1);
+	}, 1000);
+    }, 2000);
+}
+</script>
+</body>
