@@ -4,7 +4,7 @@
 
 /**
  * Simple asymmetric "synchronics" (shared cells)
- * 2016-01-12 / lhansen@mozilla.com
+ * 2016-01-13 / lhansen@mozilla.com
  *
  * A synchronic is a shared atomic cell that agents (workers or the
  * "master" main thread) can be notified of updates to.
@@ -22,7 +22,9 @@
  * unbounded number of "threads" that are cooperatively scheduled:
  * such a "thread" is suspended by setting up a callback that
  * continues the thread, and then returning to the event loop.  (With
- * Promises and especially async/await this is fairly obvious.)
+ * Promises and especially async/await this is fairly obvious.)  In
+ * that scenario one thread in the master may come to interact with
+ * another through a synchronic.
  *
  * The AsymmetricSynchronic defined here allows for signaling from the
  * master to the workers, from the workers to the master, individually
@@ -32,10 +34,13 @@
  * all invoked when a signal is returned.
  *
  * Worker-to-worker and master-to-worker communication is generally
- * quick.  Worker-to-master and master-to-master communication is
- * probably fairly slow, because actual messages must be sent and
- * handled in the master event loop.
+ * quick, as it's just a futexWake call.  Worker-to-master and
+ * master-to-master communication is fairly slow, because actual
+ * messages must be sent to the master and must be dispatched in the
+ * master event loop.
  */
+
+"use strict";
 
 // Private constants.
 
@@ -67,12 +72,19 @@ const _setTimeout =
 	   throw new Error("No timeouts available");
        });
 
-const _postMessageToSelf = function (datum) {
+const _cleanTimeout =
+      function (t) {
+	  if (typeof t != "number" || isNaN(t) || t < 0)
+	      return Number.POSITIVE_INFINITY;
+	  return +t;
+      };
+
+const _postMessageMasterToMaster = function (datum) {
     window.dispatchEvent(new MessageEvent("message", {data: datum}));
 }
 
 /**
- * Create a AsymmetricSynchronic.
+ * Create an AsymmetricSynchronic.
  *
  * Use the same constructor in both master and workers.  Both sides
  * must pass the same sab and offset arguments.
@@ -80,11 +92,11 @@ const _postMessageToSelf = function (datum) {
  * - "sab" is a SharedArrayBuffer.
  * - "offset" is an offset within "sab" on a boundary according
  *    to AsymmetricSynchronic.BYTE_ALIGN.
- * - "isMaster" must be true when the master constructs the object
- * - "init" is the optional initial value for the cell
+ * - "isMaster" must be true iff the master is constructing the object
+ * - "init" is the optional initial value for the cell (master only)
  *
- * The cell will own AsymmetricSynchronic.BYTE_SIZE bytes within
- * "sab" starting at "offset".
+ * The cell will occupy AsymmetricSynchronic.BYTE_SIZE bytes within
+ * "sab" starting at "offset"; do not use those for anything else.
  */
 function AsymmetricSynchronic(sab, offset, isMaster_, init) {
     let ia = new Int32Array(sab, offset, _AS_SIZE/4);
@@ -111,8 +123,7 @@ AsymmetricSynchronic.BYTE_SIZE = _AS_SIZE;
 
 /**
  * Required alignment within the SharedArrayBuffer for a
- * AsymmetricSynchronic object.  Will be divisible by 4; will be at
- * most 16.
+ * AsymmetricSynchronic object.  Will be 4, 8, or 16.
  */
 AsymmetricSynchronic.BYTE_ALIGN = _AS_ALIGN;
 
@@ -143,7 +154,7 @@ AsymmetricSynchronic.DELAYED = -3;
 AsymmetricSynchronic.filterEvent = function (ev) {
     if (Array.isArray(ev.data) && ev.data.length >= 2 && ev.data[0] === _AS_NOTIFYMSG) {
 	ev.data[0] = "";
-	this._dispatchCallback(ev.data[1]);
+	this._dispatchCallback(ev.data[1], AsymmetricSynchronic.DELAYED);
 	return true;
     }
     return false;
@@ -154,31 +165,31 @@ AsymmetricSynchronic.filterEvent = function (ev) {
 AsymmetricSynchronic._callbacks = {};
 AsymmetricSynchronic._idents = 1;
 
-// Note, multiple outstanding callbacks gets in the way of the message
-// optimization suggested above _callWhenValueChanges(), below, which
-// wants there to be at most one callback.  There are probably
-// reasonable compromises for that, but that's fodder for a future
-// explanation.  For now, allowing multiple callbacks seems least
-// surprising.
+// Note, having multiple outstanding callbacks gets in the way of the
+// message optimization suggested above _callWhenValueChanges(),
+// below, which wants there to be at most one callback.  There are
+// probably reasonable compromises for that, but that's future work.
+// For now, allowing multiple callbacks is least surprising and is
+// required for master-to-master signaling to work.
 
 AsymmetricSynchronic._registerCallback = function(swu, cb, timeout) {
     let id = swu._id;
     if (!this._callbacks[id])
 	this._callbacks[id] = [];
     this._callbacks[id].push(cb);
-    if (timeout != Number.POSITIVE_INFINITY && !isNaN(timeout)) {
-	console.log("Setting timeout " + timeout);
-	_setTimeout(() => this._dispatchCallback(id), timeout);
+    if (isFinite(timeout)) {
+	_setTimeout(() => this._dispatchCallback(id, AsymmetricSynchronic.TIMEDOUT),
+		    timeout);
     }
 }
 
-AsymmetricSynchronic._dispatchCallback = function (id) {
+AsymmetricSynchronic._dispatchCallback = function (id, why) {
     let cbs = this._callbacks[id];
     if (!cbs)
 	return;
     this._callbacks[id] = null;
     for ( let i=0 ; i < cbs.length ; i++ )
-	cbs[i]();
+	cbs[i](why);
 }
 
 /**
@@ -260,7 +271,7 @@ AsymmetricSynchronic.prototype.exchange = function (v) {
 }
 
 /**
- * Notify any listeners.
+ * Notify any listeners to wake up and re-check their conditions.
  */
 AsymmetricSynchronic.prototype.notify = function () {
     this._notify();
@@ -270,7 +281,7 @@ AsymmetricSynchronic.prototype.notify = function () {
  * Master-only API:
  *
  * Examine the value in the cell and invoke callback when the cell
- * value is found not to be v, or when the call times out after t
+ * value is found not to be v or when the call times out after t
  * milliseconds.
  *
  * When the callback is invoked it is invoked with one of three
@@ -286,31 +297,29 @@ AsymmetricSynchronic.prototype.callWhenUpdated = function (value_, callback, tim
     this._checkAPI(true, "callWhenUpdated");
 
     let value = value_|0;
-    let timeout = +timeout_;
+    let timeout = _cleanTimeout(timeout_);
     let now = _now();
     let limit = now + timeout;
     let ia = this._ia;
-    let firstTime = true;
 
-    let check = () => {
+    let check = (why) => {
 	let v = Atomics.load(ia, _AS_VAL);
 	if (v !== value) {
 	    Atomics.store(ia, _AS_WAITBITS, 0);
-	    callback(firstTime ? AsymmetricSynchronic.IMMEDIATE : AsymmetricSynchronic.DELAYED);
-	    return firstTime;
+	    callback(why);
+	    return why == AsymmetricSynchronic.IMMEDIATE;
 	}
 	now = _now();
 	if (now >= limit) {
 	    Atomics.store(ia, _AS_WAITBITS, 0);
-	    callback(AsymmetricSynchronic.DELAYED);
+	    callback(AsymmetricSynchronic.TIMEDOUT);
 	    return false;
 	}
-	firstTime = false;
 	Atomics.store(ia, _AS_WAITBITS, _AS_WAITFLAG);
 	return AsymmetricSynchronic._registerCallback(this, check, limit - now);
     }
 
-    return check();
+    return check(AsymmetricSynchronic.IMMEDIATE);
 }
 
 /**
@@ -345,13 +354,12 @@ AsymmetricSynchronic.prototype.callWhenNotEquals = function (v, callback) {
  * Worker-only API:
  *
  * Examine the value in the cell and if it is v block until it becomes
- * something other than v, or until the timeout t (milliseconds)
- * expires.
+ * something other than v or until the timeout t (milliseconds) expires.
  */
 AsymmetricSynchronic.prototype.expectUpdate = function (value_, timeout_) {
     this._checkAPI(false, "expectUpdate");
     let value = value_|0;
-    let timeout = +timeout_;
+    let timeout = _cleanTimeout(timeout_);
     let now = _now();
     let limit = now + timeout;
     let ia = this._ia;
@@ -369,8 +377,7 @@ AsymmetricSynchronic.prototype.expectUpdate = function (value_, timeout_) {
  * Worker-only API:
  *
  * Examine the value in the cell and if it is not v block until it
- * becomes v.  Returns the value that was observed (ie, v, modulo
- * conversions).
+ * becomes v.  Returns the value that was observed.
  */
 AsymmetricSynchronic.prototype.waitUntilEquals = function (v) {
     this._checkAPI(false, "waitUntilEquals");
@@ -398,13 +405,12 @@ AsymmetricSynchronic.prototype._checkAPI = function (requireMaster, m) {
 AsymmetricSynchronic.prototype._waitOnValue = function (value_, equals) {
     let value = value_|0;
     let ia = this._ia;
-    let v = 0;
     for (;;) {
-	let tag = Atomics.load(ia, _AS_SEQ);
-	v = Atomics.load(ia, _AS_VAL) ;
+	let oldval = Atomics.load(ia, _AS_SEQ);
+	let v = Atomics.load(ia, _AS_VAL) ;
 	if (equals ? v === value : v !== value)
 	    return v;
-	this._waitForUpdate(tag, Number.POSITIVE_INFINITY);
+	this._waitForUpdate(oldval, Number.POSITIVE_INFINITY);
     }
 }
 
@@ -431,21 +437,19 @@ AsymmetricSynchronic.prototype._waitOnValue = function (value_, equals) {
 AsymmetricSynchronic.prototype._callWhenValueChanges = function (value_, callback, equals) {
     let value = value_|0;
     let ia = this._ia;
-    let firstTime = true;
 
-    let check = () => {
+    let check = (why) => {
 	let v = Atomics.load(ia, _AS_VAL);
 	if (equals ? v === value : v !== value) {
 	    Atomics.store(ia, _AS_WAITBITS, 0);
-	    callback(firstTime ? AsymmetricSynchronic.IMMEDIATE : AsymmetricSynchronic.DELAYED);
-	    return firstTime;
+	    callback(why);
+	    return why == AsymmetricSynchronic.IMMEDIATE;
 	}
-	firstTime = false;
 	Atomics.store(ia, _AS_WAITBITS, _AS_WAITFLAG);
 	return AsymmetricSynchronic._registerCallback(this, check, Number.POSITIVE_INFINITY);
     }
 
-    return check();
+    return check(AsymmetricSynchronic.IMMEDIATE);
 }
 
 AsymmetricSynchronic.prototype._notify = function () {
@@ -462,7 +466,7 @@ AsymmetricSynchronic.prototype._notifyToMaster = function () {
     {
 	let id = Atomics.load(ia, _AS_ID);
 	if (this._isMaster)
-	    _postMessageToSelf([_AS_NOTIFYMSG, id]);
+	    _postMessageMasterToMaster([_AS_NOTIFYMSG, id]);
 	else
 	    postMessage([_AS_NOTIFYMSG, id]);
     }
@@ -482,4 +486,3 @@ AsymmetricSynchronic.prototype._waitForUpdate = function (tag, timeout) {
     Atomics.futexWait(ia, _AS_SEQ, tag, timeout);
     Atomics.sub(ia, _AS_NUMWAIT, 1);
 }
-
