@@ -40,6 +40,13 @@
  * master event loop.
  */
 
+/* IMPORTANT USAGE NOTE:
+ *
+ * Message events are being used to signal the master.  For this to work,
+ * the client must be sure to route Message events to the Synchronic
+ * subsystem.  See comments at AsymmetricSynchronic.filterEvent(), below.
+ */
+
 "use strict";
 
 // Private constants.
