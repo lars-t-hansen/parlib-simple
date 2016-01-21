@@ -19,7 +19,6 @@ onmessage = function (ev) {
     let received = [];
     for (;;) {
 	let item = MPIQ.take();
-	//console.log("Item was received: " + item);
 	if (item[1] === 0)
 	    break;
 	if (item.length != item[1] + 4) {

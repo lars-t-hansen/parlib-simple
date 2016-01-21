@@ -32,7 +32,7 @@ function handleMsg(ev) {
     if (AsymmetricSynchronic.filterEvent(ev))
 	return;
     if (Array.isArray(ev.data) && ev.data[0] === "phase1") {
-	msg(ev.data.toSource());
+	msg(ev.data.join(" "));
 	let data = ev.data[2];
 	let id = ev.data[1];
 	for ( let i=0 ; i < data.length ; i++ ) {
