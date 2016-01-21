@@ -2,6 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+"use strict";
+
 // Master producer, worker consumers.
 //
 // The data are 4+n-word bundles: iter, n, fib(n), fib(n-3), 0, 1, ..., n-1
