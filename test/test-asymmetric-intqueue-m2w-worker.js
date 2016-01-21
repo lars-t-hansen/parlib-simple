@@ -26,7 +26,10 @@ onmessage = function (ev) {
 	    console.log("Bad item: " + item);
 	    break;
 	}
-	let [iter, n, fibn, fibn3] = item;
+	let iter = item[0];
+	let n = item[1];
+	let fibn = item[2];
+	let fibn3 = item[3];
 	if (fibn3 != fib(n-3)) {
 	    console.log("Bad data: " + item);
 	    break;
