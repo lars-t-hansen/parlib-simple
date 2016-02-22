@@ -11,11 +11,12 @@ var iterations = 1000000;
 
 var bufSize = 1024;
 var syncOffset = 512;
+var polyOffset = 800;
 var workOffset = 0;
 var sab = new SharedArrayBuffer(bufSize);
 
 for ( var i=0 ; i < 2 ; i++ ) {
     var w = new Worker("synchronic-worker.js");
     w.onmessage = function (ev) { msg(ev.data) }
-    w.postMessage([sab, syncOffset, workOffset, iterations, i], [sab]);
+    w.postMessage([sab, syncOffset, workOffset, polyOffset, iterations, i], [sab]);
 }

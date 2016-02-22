@@ -2,6 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+importScripts("worker-common.js");
+
 onmessage =
     function (ev) {
 	var [sab, sabIdx, locIdx, iterations, who] = ev.data;
@@ -18,26 +20,22 @@ onmessage =
 		Atomics.futexWait(s, 0, x++);
 		iab[0]++;
 		Atomics.store(s, 0, ++x);
-		Atomics.futexWake(s, 0, Number.POSITIVE_INFINITY);
+		Atomics.futexWake(s, 0, 0x7FFFFFFF); // Chrome bug on infinity
 	    }
 	    else {
 		iab[0]++;
 		Atomics.store(s, 0, ++x);
-		Atomics.futexWake(s, 0, Number.POSITIVE_INFINITY);
+		Atomics.futexWake(s, 0, 0x7FFFFFFF); // Chrome bug on infinity
 		Atomics.futexWait(s, 0, x++);
 	    }
 	}
 	msg("Worker " + who + " done");
 
 	if (who == 1) {
-	    msg("Counter: " + s[0]);
-	    msg("Should be " + iterations*2 + ": " + iab[0]);
+	    assertEqual(iterations*2, s[0]);
+	    assertEqual(iterations*2, iab[0]);
 	    msg(Math.round(1000 * (2*iterations) / (Date.now() - start)) + " messages/s");
 	}
 
 	msg("Worker " + who + " exiting");
     };
-
-function msg(s) {
-    postMessage(s);
-}
