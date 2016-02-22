@@ -22,6 +22,8 @@
 // check the value and to listen again if the value is for some other
 // worker.
 
+"use strict";
+
 const DEBUG = true;
 
 const numWorkers = 3;

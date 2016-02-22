@@ -2,12 +2,17 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+"use strict";
+
 importScripts("../src/asymmetric-synchronic.js");
 
 var DEBUG = false;
 
 onmessage = function (ev) {
-    let [ _, myId, sab, asOffset] = ev.data;
+    let d = ev.data;
+    let myId = d[1];
+    let sab = d[2];
+    let asOffset = d[3];
     let AS = new AsymmetricSynchronic(sab, asOffset, false);
     let v = 0;
     let results = [];
