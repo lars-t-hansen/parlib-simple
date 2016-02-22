@@ -13,8 +13,8 @@ onmessage =
 	var sync = new Int32Array(sab, syncOffset, 1);
 	var work = new Int32Array(sab, workOffset, 1);
 
-	if (mustPolyfillSynchronic())
-	    polyfillSynchronic(new Int32Array(sab, polyOffset, Synchronic.NUMLOCS));
+	if (Synchronic.mustPolyfill())
+	    Synchronic.polyfill(new Int32Array(sab, polyOffset, Synchronic.NUMLOCS));
 
 	var start = Date.now();
 

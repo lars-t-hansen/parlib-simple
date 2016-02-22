@@ -6,8 +6,7 @@
  * spinloops.  This should perform reasonably well across platforms
  * but is probably suboptimal on all platforms.
  *
- * Users should call polyfillSynchronic(), below, with the required
- * parameters.  That function will polyfill unconditionally, so watch it.
+ * See Synchronic.setup() and Synchronic.polyfill() for usage info.
  *
  * Tested with Chrome 50 Canary, Firefox 47 Nightly, and Firefox 46
  * Developer Edition on 2016-02-22.
@@ -19,15 +18,31 @@ var Synchronic = {
 
     NUMLOCS: 1,
 
-    // Every worker must call this first.  It is called from
-    // polyfillSynchronic, if you use that.  "locs" is an Int32Array
-    // on shared memory that the Synchronic system can use for
-    // bookkeeping.  The length is at least Synchronic.NUMLOCS, slots
-    // 0 through NUMLOCS will be clobbered by Synchronic.  All the loc
-    // values must be zero before any worker calls setup().
+    // Every worker must call Synchronic.setup() first.  It is called
+    // from polyfillSynchronic, if you use that.  "locs" is an
+    // Int32Array on shared memory that the Synchronic system can use
+    // for bookkeeping.  The length is at least Synchronic.NUMLOCS,
+    // slots 0 through NUMLOCS will be clobbered by Synchronic.  All
+    // the loc values must be zero before any worker calls setup().
 
     setup: function (locs) {
 	Synchronic._private = locs;
+    },
+
+    mustPolyfill: function () {
+	return !Atomics.expect;
+    },
+
+    // locs is an array of shared int32 values, see setup() above.
+
+    polyfill: function(locs) {
+	if (!(locs instanceof Int32Array) || !(locs.buffer instanceof SharedArrayBuffer) || locs.length < Synchronic.NUMLOCS)
+	    throw new Error("Bad bookkeeping data structure for polyfillSynchronic()");
+	Atomics.expect = Synchronic.expect;
+	Atomics.expectUpdate = Synchronic.expectUpdate;
+	Atomics.storeNotify = Synchronic.storeNotify;
+	Atomics.notify = Synchronic.notify;
+	Synchronic.setup(locs);
     },
 
     // Wait until i32a[loc] == desired.
@@ -93,25 +108,8 @@ var Synchronic = {
     // This is long enough to allow the "work" between a receive and a
     // send in the synchronic benchmark to be doubly-recursive fib(10)
     // in Firefox Nightly without going into futexWait most of the
-    // time.  (The cutoff for Chrome Canary is below 50 [sic].)
+    // time.  (The cutoff for Chrome Canary is below 50 [sic].)  See
+    // synchronic-worker.js.
 
     _spincount: 5000,
-}
-
-function mustPolyfillSynchronic() {
-    return !Atomics.expect;
-}
-
-// locs is an array of shared int32 values, see setup() above.
-
-function polyfillSynchronic(locs) {
-    if (!mustPolyfillSynchronic())
-	return;
-    if (!(locs instanceof Int32Array) || !(locs.buffer instanceof SharedArrayBuffer) || locs.length < Synchronic.NUMLOCS)
-	throw new Error("Bad bookkeeping data structure for polyfillSynchronic()");
-    Atomics.expect = Synchronic.expect;
-    Atomics.expectUpdate = Synchronic.expectUpdate;
-    Atomics.storeNotify = Synchronic.storeNotify;
-    Atomics.notify = Synchronic.notify;
-    Synchronic.setup(locs);
 }
