@@ -7,7 +7,7 @@
 // workers use futex operations on the sync location to coordinate
 // access to the data location.
 
-var iterations = 1000000;
+var iterations = 200000;
 
 var bufSize = 1024;
 var syncOffset = 512;

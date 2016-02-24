@@ -17,16 +17,20 @@ onmessage =
 	var x = 0;
 	for ( var i=0 ; i < iterations ; i++ ) {
 	    if (who == 0) {
-		Atomics.futexWait(s, 0, x++);
+		while (Atomics.load(s, 0) == x)
+		    Atomics.futexWait(s, 0, x);
+		x++;
 		iab[0]++;
 		Atomics.store(s, 0, ++x);
-		Atomics.futexWake(s, 0, 0x7FFFFFFF); // Chrome bug on infinity
+		Atomics.futexWake(s, 0, 1);
 	    }
 	    else {
 		iab[0]++;
 		Atomics.store(s, 0, ++x);
-		Atomics.futexWake(s, 0, 0x7FFFFFFF); // Chrome bug on infinity
-		Atomics.futexWait(s, 0, x++);
+		Atomics.futexWake(s, 0, 1);
+		while (Atomics.load(s, 0) == x)
+		    Atomics.futexWait(s, 0, x);
+		x++;
 	    }
 	}
 	msg("Worker " + who + " done");
