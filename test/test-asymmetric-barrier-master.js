@@ -38,14 +38,9 @@ const barrier = new MasterBarrier(iab, barrierIdx, barrierID, numWorkers, barrie
 function runTest() {
     for ( var id=0 ; id < numWorkers ; id++ ) {
         var w = new Worker("test-asymmetric-barrier-worker.js");
-        w.onmessage =
-            function (ev) {
-		if (Array.isArray(ev.data) && ev.data[0] === "MasterBarrier.dispatch")
-		    MasterBarrier.dispatch(ev.data);
-                else
-                    msg(String(ev.data));
-            };
-        w.postMessage([sab, numIter, barrierIdx, barrierID, addendIdx, segmentSize*id, segmentSize], [sab]);
+	MasterBarrier.addWorker(w);
+	w.addEventListener("message", function (ev) { msg(String(ev.data)) });
+        w.postMessage(["setup", sab, numIter, barrierIdx, barrierID, addendIdx, segmentSize*id, segmentSize], [sab]);
     }
 }
 

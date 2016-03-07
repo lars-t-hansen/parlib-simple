@@ -1,4 +1,5 @@
 importScripts("../src/float64atomics.js",
+	      "../src/message.js",
 	      "../src/asymmetric-barrier.js");
 
 onmessage = function (ev) {

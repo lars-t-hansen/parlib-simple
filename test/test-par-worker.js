@@ -2,16 +2,12 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-importScripts("../src/asymmetric-barrier.js",
+importScripts("../src/message.js",
+	      "../src/asymmetric-barrier.js",
 	      "../src/marshaler.js",
 	      "../src/par.js");
 
 var Par = new WorkerPar();
-onmessage =
-     function (ev) {
-         if (!Par.dispatch(ev.data))
-	     postMessage("Unknown message received in worker: " + ev.data);
-     };
 
 var height = 0;
 var width = 0;

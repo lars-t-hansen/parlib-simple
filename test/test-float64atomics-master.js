@@ -30,12 +30,8 @@ var iterations = 1000000;
 function runTest() {
     for ( var i=0 ; i < numWorkers ; i++ ) {
 	var w = new Worker("test-float64atomics-worker.js");
-	w.onmessage = function (ev) {
-	    if (Array.isArray(ev.data) && ev.data[0] === "MasterBarrier.dispatch")
-		MasterBarrier.dispatch(ev.data);
-	    else
-		msg(String(ev.data));
-	};
+	MasterBarrier.addWorker(w);
+	w.addEventListener("message", function (ev) { msg(String(ev.data)) });
 	w.postMessage([sab, barrierIdx, barrierId, accIdx, atomicIdx, iterations], [sab]);
     }
 }

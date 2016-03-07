@@ -29,13 +29,11 @@ function runTest() {
 var expected = 0;
 var steps = 0;
 var maxSteps = 10;
-var old;
 var xs = [];
 
 function ready() {
     // Test Par.self on the worker side; also tests eval()
-    old = Par.messageNotUnderstood;
-    Par.messageNotUnderstood = function (x) { xs.push(x) }
+    Par.setMessageNotUnderstood(function (x) { xs.push(x) });
     Par.eval(ready2, "postMessage(Par.self);");
 }
 
@@ -45,7 +43,7 @@ function ready2() {
 	selfs += i;
     if (xs.sort().join("") != selfs)
 	throw new Error("Problem with Par.self: " + xs.join(" "));
-    Par.messageNotUnderstood = old;
+    Par.setMessageNotUnderstood(null);
 
     // Test broadcast
     Par.broadcast(null, "setParameters", height, width, aux);
