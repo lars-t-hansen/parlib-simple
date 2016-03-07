@@ -215,6 +215,37 @@ MasterPar.prototype.eval =
 	this._comm(_PAR_BROADCAST, doneCallback, "_WorkerPar_eval", [], [program]);
     };
 
+// Manage a handler for messages that are not consumed by other handlers.
+// For debugging and testing, mostly.  This must be called after all other
+// handlers have been installed.
+//
+// fn is null to reset, any other function to set.  It is passed the
+// data member of the event.
+
+MasterPar.prototype.setMessageNotUnderstood = function (fn) {
+    if (fn) {
+	if (!_notUnderstoodFn) {
+	    for ( var w of this._workers )
+		w.addEventListener("message", _notUnderstoodHandler);
+	}
+    }
+    else {
+	if (_notUnderstoodFn) {
+	    for ( var w of this._workers )
+		w.removeEventListener("message", _notUnderstoodHandler);
+	}
+    }
+    _notUnderstoodFn = fn;
+}
+
+var _notUnderstoodFn = null;
+
+function _notUnderstoodHandler(ev) {
+    ev.stopImmediatePropagation();
+    _notUnderstoodFn(ev.data);
+}
+
+
 // Internal
 
 MasterPar.prototype._comm =
@@ -496,4 +527,23 @@ WorkerPar.prototype._messageLoop =
 
 function _WorkerPar_eval(program) {
     _Par_global.eval(program);
+}
+
+// Manage a handler for messages that are not consumed by other handlers.
+// For debugging and testing, mostly.  This must be called after all other
+// handlers have been installed.
+//
+// fn is null to reset, any other function to set.  It is passed the
+// data member of the event.
+
+WorkerPar.prototype.setMessageNotUnderstood = function (fn) {
+    if (fn) {
+	if (!_notUnderstoodFn)
+	    self.addEventListener("message", _notUnderstoodHandler);
+    }
+    else {
+	if (_notUnderstoodFn)
+	    self.removeEventListener("message", _notUnderstoodHandler);
+    }
+    _notUnderstoodFn = fn;
 }
