@@ -2,8 +2,12 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+// REQUIRE:
+//   message.js
+
 // Asymmetric barrier synchronization.
-// 2015-01-19 / lhansen@mozilla.com
+// 2015-01-19 / v1
+// 2016-03-07 / v2, handle message events differently, see addWorker()
 
 // MasterBarrier / WorkerBarrier.
 //
@@ -24,17 +28,16 @@
 //
 // Usage
 // -----
-// Client code in the master must create a MasterBarrier, and must
-// ensure that MasterBarrier.dispatch is invoked when a worker's
-// onmessage handler receives a message that the workers are all in
-// the barrier.  That message is an array of the form
-// ["MasterBarrier.dispatch", ...].  MasterBarrier.dispatch should
-// be invoked on the message.
+// Client code in the master must create a MasterBarrier object per
+// barrier.
 //
 // The workers must each create a WorkerBarrier on the same shared
 // locations and with the same ID as the master barrier.  The
 // WorkerBarriers must not be created until after the MasterBarrier
 // constructor has returned.
+//
+// Client code in the master must call MasterBarrier.addWorker(w) on
+// each worker w to install event handling machinery in that worker.
 //
 // The application is responsible for allocating the locations in the
 // integer array and communicating those and the ID to the workers.
@@ -70,6 +73,20 @@ function MasterBarrier(iab, ibase, ID, numWorkers, callback) {
     MasterBarrier._callbacks[ID] = callback;
 }
 
+// Call this with any worker w that participates in any barrier to
+// install message handling machinery for the barrier.  One invocation
+// per worker is enough.
+
+MasterBarrier.addWorker = function (w) {
+    dispatchMessage(w, "MasterBarrier.dispatch", function (data) {
+	const id = data[1];
+	const cb = MasterBarrier._callbacks[id];
+	if (!cb)
+	    throw new Error("Unknown barrier ID: " + id);
+	return cb();
+    });
+}
+
 // PRIVATE.  Maps barrier IDs to callback functions.
 
 MasterBarrier._callbacks = {};
@@ -78,19 +95,6 @@ MasterBarrier._callbacks = {};
 // the barrier.
 
 MasterBarrier.NUMINTS = 2;
-
-// The master's onmessage handler must call dispatch() to invoke the
-// callback when receiving an appropriate message, see introduction
-// above.
-
-MasterBarrier.dispatch =
-    function (data) {
-	const id = data[1];
-	const cb = MasterBarrier._callbacks[id];
-	if (!cb)
-	    throw new Error("Unknown barrier ID: " + id);
-	return cb();
-    };
 
 // Return true iff the workers are all waiting in the barrier.
 //

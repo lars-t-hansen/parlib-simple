@@ -4,17 +4,13 @@
 
 "use strict";
 
-importScripts("../../src/asymmetric-barrier.js",
+importScripts("../../src/message.js",
+	      "../../src/asymmetric-barrier.js",
 	      "../../src/marshaler.js",
 	      "../../src/par.js",
 	      "mandelbrot-parameters.js");
 
 const Par = new WorkerPar();
-onmessage =
-    function (ev) {
-	if (!Par.dispatch(ev.data))
-	    postMessage("Unknown: " + ev.data);
-    };
 
 // Colors are ABGR with A=255.
 const colors = [0xFFFF0700, 0xFF2a2aa5, 0xFFFFff00, 0xFFa19eff,
@@ -144,6 +140,7 @@ function mandelbrot_asm_simd_module(glob, ffi, heap) {
     var aload = glob.Atomics.load; // Declare shared memory
     var imul = glob.Math.imul;
     var toF = glob.Math.fround;
+    var b4 = glob.SIMD.Bool32x4;
     var i4 = glob.SIMD.Int32x4;
     var f4 = glob.SIMD.Float32x4;
     var i4add = i4.add;
@@ -154,6 +151,9 @@ function mandelbrot_asm_simd_module(glob, ffi, heap) {
     var f4mul = f4.mul;
     var f4lessThan = f4.lessThan;
     var f4splat = f4.splat;
+    const b4Any = b4.anyTrue;
+    const i4select = i4.select;
+    const zero4 = i4(0,0,0,0);
     const one4 = i4(1,1,1,1);
     const two4 = f4(2,2,2,2);
     const four4 = f4(4,4,4,4);
@@ -171,6 +171,7 @@ function mandelbrot_asm_simd_module(glob, ffi, heap) {
 	membase = membase|0;
 	colbase = colbase|0;
 	magnification = toF(magnification);
+
 	var g_top = toF(0);
 	var g_bottom = toF(0);
 	var g_left = toF(0);
@@ -181,7 +182,7 @@ function mandelbrot_asm_simd_module(glob, ffi, heap) {
 	var y0 = f4(0,0,0,0);
 	var x = f4(0,0,0,0);
 	var y = f4(0,0,0,0);
-	var mi4 = i4(0,0,0,0);
+	var mi4 = b4(0,0,0,0);
 	var xsq = f4(0,0,0,0);
 	var ysq = f4(0,0,0,0);
 	var xtemp = f4(0,0,0,0);
@@ -224,12 +225,12 @@ function mandelbrot_asm_simd_module(glob, ffi, heap) {
 		    xsq = f4mul(x,x);
 		    ysq = f4mul(y,y);
 		    mi4 = f4lessThan(f4add(xsq, ysq), four4);
-		    if ((mi4.signMask | 0) == 0x00)
+		    if (!b4Any(mi4))
 			break;
 		    xtemp = f4add(f4sub(xsq, ysq), x0);
 		    y = f4add(f4mul(two4, f4mul(x, y)), y0);
 		    x = xtemp;
-		    count4 = i4add(count4, i4and(mi4, one4));
+		    count4 = i4add(count4, i4select(mi4, one4, zero4));
 		}
 
 		loc = imul(imul(Py|0, width|0) + Px|0 + 0, 4);

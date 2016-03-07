@@ -7,17 +7,14 @@
  * Author: Lars T Hansen, lth@acm.org / lhansen@mozilla.com
  */
 
-importScripts("../../src/asymmetric-barrier.js",
+importScripts("../../src/message.js",
+	      "../../src/asymmetric-barrier.js",
 	      "../../src/marshaler.js",
 	      "../../src/par.js",
 	      "../../../flatjs/libflatjs.js",
 	      "ray-common.js");
 
 const Par = new WorkerPar();
-onmessage = function (ev) {
-    if (!Par.dispatch(ev.data))
-	console.log("Unknown message received in worker: " + ev.data);
-}
 
 function setup(RAW_MEMORY) {
     FlatJS.init(RAW_MEMORY, 0, RAW_MEMORY.byteLength, false);

@@ -6,22 +6,22 @@
 
 // See explanation in mandelbrot-master.js.
 
-importScripts("../../src/asymmetric-barrier.js",
+importScripts("../../src/message.js",
+	      "../../src/asymmetric-barrier.js",
 	      "mandelbrot-parameters.js");
 
-onmessage =
-    function (ev) {
-	var [sab, intByteOffset, intLength, floByteOffset, floLength, barrierID, barrierLoc, magnificationLoc, ybase, ylimit] = ev.data;
-	var intmem = new Int32Array(sab, intByteOffset, intLength);
-	var flomem = new Float64Array(sab, floByteOffset, floLength);
-	var barrier = new WorkerBarrier(intmem, barrierLoc, barrierID);
+dispatchMessage(self, "setup", function (data) {
+    var [_, sab, intByteOffset, intLength, floByteOffset, floLength, barrierID, barrierLoc, magnificationLoc, ybase, ylimit] = data;
+    var intmem = new Int32Array(sab, intByteOffset, intLength);
+    var flomem = new Float64Array(sab, floByteOffset, floLength);
+    var barrier = new WorkerBarrier(intmem, barrierLoc, barrierID);
 
+    barrier.enter();
+    while (flomem[magnificationLoc] != 0) {
+	mandelbrot(intmem, ybase, ylimit, flomem[magnificationLoc]);
 	barrier.enter();
-	while (flomem[magnificationLoc] != 0) {
-	    mandelbrot(intmem, ybase, ylimit, flomem[magnificationLoc]);
-	    barrier.enter();
-	}
-    };
+    }
+});
 
 // Maximum iterations per pixel.
 const MAXIT = 200;

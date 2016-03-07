@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // REQUIRE:
+//   message.js
 //   asymmetric-barrier.js
 //   marshaler.js
 
@@ -30,10 +31,6 @@
 //
 // Call M.eval() to eval a program in each worker.  This is useful for
 //   broadcasting program code or performing precomputation.
-//
-// Each worker must call W.dispatch() when it receives a message from
-//   its parent, and otherwise just define the global functions that
-//   will be referenced by remote invocations.
 
 "use strict";
 
@@ -89,7 +86,7 @@ function MasterPar(iab, ibase, numWorkers, workerScript, readyCallback) {
 
     for ( var i=0 ; i < numWorkers ; i++ ) {
 	var w = new Worker(workerScript);
-	w.onmessage = messageHandler;
+	MasterBarrier.addWorker(w);
 	w.postMessage(["WorkerPar.start",
 		       iab.buffer, iab.byteOffset, i,
 		       this._barrierLoc, barrierID, this._opLoc, this._funcLoc, this._sizeLoc, this._nextLoc,
@@ -113,18 +110,6 @@ function MasterPar(iab, ibase, numWorkers, workerScript, readyCallback) {
 	else
 	    throw new Error("No barrier callback installed!");
     }
-
-    function messageHandler(ev) {
-	var handled = false;
-	if (Array.isArray(ev.data) && ev.data.length >= 1) {
-	    if (ev.data[0] === "MasterBarrier.dispatch") {
-		handled = true;
-		MasterBarrier.dispatch(ev.data);
-	    }
-	}
-	if (!handled)
-	    self.messageNotUnderstood(ev.data);
-    }
 }
 
 // Number of integer locations reserved for working storage for the
@@ -134,18 +119,6 @@ function MasterPar(iab, ibase, numWorkers, workerScript, readyCallback) {
 // invocations across large index spaces or with many arguments.)
 
 MasterPar.NUMINTS = 65536;
-
-// messageNotUnderstood()
-//
-// This method is invoked if a worker posts a message that is not
-// understood by the Par framework.  The argument is the event data
-// object.  The method can do with the message what it wants.  The
-// method's return value is ignored.
-
-MasterPar.prototype.messageNotUnderstood =
-    function (message) {
-	console.log(message);
-    };
 
 // Private constants.
 
@@ -389,24 +362,27 @@ MasterPar.prototype._comm =
     };
 
 // Create a WorkerPar object.
-//
-// The client's worker code must ensure that the WorkerPar instance's
-// dispatch() method is invoked when a message is received.  That
-// method will return true if it consumed the message.  Typically:
-//
-//   var wp = new WorkerPar();
-//   onmessage =
-//       function (ev) {
-//           if (!wp.dispatch(ev.data))
-//              handleMessageSomehow(ev.data);
-//       };
-//
-// Note that it does not normally make sense to create multiple
-// WorkerPar objects in the same worker, and doing so is not supported
-// by current code.
 
 function WorkerPar() {
-    this._initialized = false;
+    var wp = this;
+
+    wp._initialized = false;
+
+    dispatchMessage(self, "WorkerPar.start", function (data) {
+	if (wp._initialized)
+	    throw new Error("WorkerPar can only be initialized once");
+	wp._initialize(data);
+	wp._messageLoop();
+    });
+
+    dispatchMessage(self, "WorkerPar.transfer", function (data) {
+	if (!wp._initialized)
+	    throw new Error("WorkerPar is not yet initialized");
+	data.shift();
+	for ( var [sab,id] of data )
+	    wp._marshaler.registerSAB(sab, id);
+	wp._messageLoop();
+    });
 }
 
 // self()
@@ -417,40 +393,6 @@ function WorkerPar() {
 Object.defineProperty(WorkerPar.prototype,
 		      "self",
 		      { get: function () { return this._identity } });
-
-// Attempt to dispatch a message.
-//
-// 'message' is the event's 'data' field.
-//
-// Return true if the message was consumed, false if not.  See comment
-// above the WorkerPar constructor for more.
-
-WorkerPar.prototype.dispatch =
-    function (message) {
-        if (!Array.isArray(message) || typeof message[0] != 'string')
-	    return false;
-	switch (message[0]) {
-	case "WorkerPar.start":
-	    if (this._initialized)
-		throw new Error("WorkerPar can only be initialized once");
-	    this._initialize(message);
-	    this._messageLoop();
-	    return true;
-
-	case "WorkerPar.transfer":
-	    if (!this._initialized)
-		throw new Error("WorkerPar is not yet initialized");
-	    var info = message;
-	    info.shift();
-	    for ( var [sab,id] of info )
-		this._marshaler.registerSAB(sab, id);
-	    this._messageLoop();
-	    return true;
-
-	default:
-	    return false;
-	}
-    };
 
 // Internal
 

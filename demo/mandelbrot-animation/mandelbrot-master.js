@@ -35,14 +35,9 @@ const sliceHeight = Math.ceil(height/numWorkers);
 
 for ( var i=0 ; i < numWorkers ; i++ ) {
     var w = new Worker("mandelbrot-worker.js");
-    w.onmessage =
-	function (ev) {
-	    if (Array.isArray(ev.data) && ev.data[0] === "MasterBarrier.dispatch")
-		MasterBarrier.dispatch(ev.data);
-	    else
-		console.log(ev.data);
-	}
-    w.postMessage([rawmem,
+    MasterBarrier.addWorker(w);
+    w.postMessage(["setup",
+		   rawmem,
 		   intmem.byteOffset,
 		   intmem.length,
 		   flomem.byteOffset,

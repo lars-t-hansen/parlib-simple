@@ -246,7 +246,6 @@ MasterProducerIntQueue.prototype.takeOrFail = function () {
 	return false;
     }
     let n = ia[_IQ_BASE + remove];
-    //console.log("Remove: Length = " + n);
     remove = (remove + 1) % size;
     let item = [];
     for ( ; n > 0 ; n-- ) {
@@ -265,7 +264,6 @@ MasterProducerIntQueue.prototype.take = function () {
 	let item = this.takeOrFail();
 	if (item)
 	    return item;
-	//console.log("Worker is waiting");
 	this._pop.waitUntilNotEquals(0);
     }
 }

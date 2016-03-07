@@ -4,17 +4,13 @@
 
 "use strict";
 
-importScripts("../../src/asymmetric-barrier.js",
+importScripts("../../src/message.js",
+	      "../../src/asymmetric-barrier.js",
 	      "../../src/marshaler.js",
 	      "../../src/par.js",
 	      "mandelbrot-parameters.js");
 
 const Par = new WorkerPar();
-onmessage =
-    function (ev) {
-	if (!Par.dispatch(ev.data))
-	    postMessage("Unknown: " + ev.data);
-    };
 
 // Maximum iterations per pixel.
 const MAXIT = 200;

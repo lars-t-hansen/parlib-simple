@@ -27,17 +27,14 @@
 
 "use strict";
 
-importScripts("../../src/asymmetric-barrier.js",
+importScripts("../../src/message.js",
+	      "../../src/asymmetric-barrier.js",
 	      "../../src/marshaler.js",
 	      "../../src/par.js");
 
 importScripts("renderWorld-kernel.js"); // The MineKernel function
 
 var Par = new WorkerPar();
-onmessage = function (ev) {
-    if (!Par.dispatch(ev.data))
-	postMessage("Not understood: " + ev.data);
-};
 
 // MineKernel reads globalParams.
 var globalParams = { w:0, h:0, map:null, texmap: null };
