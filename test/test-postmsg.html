@@ -7,6 +7,19 @@
 <meta http-equiv="content-type" content="text/html; charset=UTF-8">
 </head>
 <body>
+
+<p> This test sends a simple JS Object <code>{ item: n }</code> where
+  <code>n</code> is a nonnegative integer back and forth between a main thread and
+  a worker using postMessage and normal onmessage handlers.  The value
+  of <code>n</code> is incremented before each send.  The object is sent 100,000
+  times.  When the run is over the number of messages per second is
+  printed below. </p>
+
+<p> The test can run from a <code>file:</code> URL in Firefox and Safari,
+  but because it uses a worker you must load it via a webserver in
+  Chrome.  If you've cloned the github repo containing this test, you
+  can serve the files in this directory by running <code>nodejs&nbsp;../bench/static-server.js</code> and then loading <code>http://localhost:8888/test-postmsg.html</code> .<p>
+
 <button onclick="runTest()" id="button" disabled="true">Run</button>
 <script src="scrool.js"></script>
 <script src="test-postmsg-master.js"></script>
