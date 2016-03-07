@@ -17,47 +17,44 @@
 //
 // TODO:
 //
-//  - It's desirable to have a faster data structure for the waiters
-//    than a single linked list, to make the critical region smaller
-//    during futexWake.  A trivial fix is one list per SAB, that's
-//    what the futex implementation in Firefox uses.  Better still,
-//    given that mostly we'll have just one SAB, is a heap or balanced
-//    tree.  But it only makes a difference if there are routinely many
-//    waiters.  There won't be more than one waiter per agent, though,
-//    and since agents (workers) are expensive it's likely there will
-//    be few of them.  So who knows.
-//  - Top-level constants are currently "var" rather than "const"
-//    for Chrome compatibility.
-//  - Presumably the private property on SAB objects could be named
-//    with a symbol, and not a forgeable string.
+//  - It's perhaps desirable to have a faster data structure for the
+//    waiters than a single linked list, to make the critical region
+//    smaller during futexWake.  A trivial fix is one list per SAB,
+//    that's what the futex implementation in Firefox uses (because it
+//    manages waiters globally and not just per-tab, as here).  Better
+//    still might be a table keyed on the (G,addr) pair: hash table,
+//    heap, quadtree.  It may make a difference if there frequently
+//    are many waiters *and* wait/wake frequency is high.  That said:
+//    since agents (workers) are expensive it's likely there will be
+//    few of them.  So who knows.
 
-// List nodes.
+// List nodes - field offsets.
 
-var _FUL_next = 0;		           // "Next" pointer
-var _FUL_prev = 1;		           // "Prev" pointer
+const _FUL_next = 0;		             // "Next" pointer
+const _FUL_prev = 1;		             // "Prev" pointer
 
-var _FUL_INTS = 2;
+const _FUL_INTS = 2;
 
-// Wait info nodes.
+// Wait info nodes - field offsets.
 
-var _FUW_wait = 0;		           // Synchronics signal and wait on this loc
-var _FUW_G = 1;			           // Node ID: the address-free identifier "G"
-var _FUW_addr = 2;		           // Node ID: the byte offset
-var _FUW_node_OFFS = 3;		           // In-line List node
-var _FUW_next = _FUW_node_OFFS + _FUL_next;
-var _FUW_prev = _FUW_node_OFFS + _FUL_prev;
+const _FUW_wait = 0;		             // Synchronics signal and wait on this loc
+const _FUW_G = 1;			     // Node ID: the address-free identifier "G"
+const _FUW_addr = 2;		             // Node ID: the byte offset
+const _FUW_node_OFFS = 3;		     // In-line List node
+const _FUW_next = _FUW_node_OFFS + _FUL_next;
+const _FUW_prev = _FUW_node_OFFS + _FUL_prev;
 
-var _FUW_INTS = _FUW_node_OFFS + _FUL_INTS;
+const _FUW_INTS = _FUW_node_OFFS + _FUL_INTS;
 
-// Global data - these are absolute word offsets.
+// Global data - absolute offsets within the working heap.
 
-var _FU_lock = 0;		           // Lock word
-var _FU_node_OFFS = 1;		           // In-line List node
-var _FU_first = _FU_node_OFFS + _FUL_next; //   First element in double circular list
-var _FU_last = _FU_node_OFFS + _FUL_prev;  //   Second element in double circular list
-var _FU_alloc = _FU_node_OFFS + _FUL_INTS; // Allocation pointer
+const _FU_lock = 0;		             // Lock word
+const _FU_node_OFFS = 1;		     // In-line List node (header)
+const _FU_first = _FU_node_OFFS + _FUL_next; //   First element in doubly-linked circular list
+const _FU_last = _FU_node_OFFS + _FUL_prev;  //   Second element in doubly-linked circular list
+const _FU_alloc = _FU_node_OFFS + _FUL_INTS; // Allocation pointer
 
-var _FU_INTS = _FU_alloc + 1;
+const _FU_INTS = _FU_alloc + 1;
 
 
 // Futex.initMemory()
@@ -129,7 +126,7 @@ var Futex =
     },
 
     // "sab" is a user SharedArrayBuffer.
-    // "tag" is a nonnegative integer less than 2^20.
+    // "tag" is a nonnegative int32.
     //
     // Tag the buffer with with the tag, for later internal use.  A
     // private property will be added to the buffer.
@@ -149,11 +146,11 @@ var Futex =
 	let tag = tag_|0;
 	if (!(sab instanceof SharedArrayBuffer))
 	    throw new Error("Not a SharedArrayBuffer: " + sab);
-	if (tag != tag_ || tag < 0 || tag > 0x000FFFFF)
+	if (tag != tag_ || tag < 0)
 	    throw new Error("Bad tag: " + tag);
-	if (sab.hasOwnProperty("_address_free_id") && sab._address_free_id != tag)
+	if (sab.hasOwnProperty(this._G) && sab[this._G] != tag)
 	    throw new Error("SharedArrayBuffer has already been tagged with a different tag");
-	sab._address_free_id = tag;
+	sab[this._G] = tag;
     },
 
     // "mem" is some Int32Array on shared memory.
@@ -257,11 +254,13 @@ var Futex =
 
     _waiter: 0,			// Offset of "waiter" node for this agent
 
+    _G: Symbol("address_free_id"),
+
     _identifier: function (sab) {
 	// Lock not held, and not needed
-	if (!sab.hasOwnProperty("_address_free_id"))
+	if (!sab.hasOwnProperty(this._G))
 	    throw new Error("SharedArrayBuffer has not been tagged");
-	return sab._address_free_id;
+	return sab[this._G];
     },
 
     _lock: function () {
