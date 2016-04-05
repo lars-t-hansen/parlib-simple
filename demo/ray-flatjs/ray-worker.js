@@ -8,7 +8,8 @@
  * Author: Lars T Hansen, lth@acm.org / lhansen@mozilla.com
  */
 
-importScripts("../../src/message.js",
+importScripts("../../util/shim.js",
+	      "../../src/message.js",
 	      "../../src/asymmetric-barrier.js",
 	      "../../src/marshaler.js",
 	      "../../src/par.js",

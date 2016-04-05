@@ -110,7 +110,7 @@
  * words as follows:
  *
  *  - the number of waiters
- *  - the wait word, a generation number used for futexWait / futexWake
+ *  - the wait word, a generation number used for wait / wake
  *  - first value word
  *  - second value word
  *
@@ -231,12 +231,12 @@ const _Synchronic_int_methods =
     },
 
     _waitForUpdate: function (tag, timeout) {
-	// Spin for a short time before going into the futexWait.
+	// Spin for a short time before going into the wait.
 	//
 	// Hard to know what a good count should be - it is machine
 	// dependent, for sure, and "typical" applications should
 	// influence the choice.  If the count is high without
-	// hindering an eventual drop into futexWait then it will just
+	// hindering an eventual drop into wait then it will just
 	// decrease performance.  If the count is low it is pointless.
 	// (This is why Synchronic really wants a native implementation.)
 	//
@@ -254,7 +254,7 @@ const _Synchronic_int_methods =
 	// THIS SYSTEM ONLY, which is a big flaw.
 	//
 	// The better fix might well be to add some kind of spin/nanosleep
-	// functionality to futexWait, see https://bugzil.la/1134973.
+	// functionality to wait, see https://bugzil.la/1134973.
 	// That functionality can be platform-dependent and even
 	// adaptive, with JIT support.
 	var i = 10000;
@@ -264,7 +264,7 @@ const _Synchronic_int_methods =
 		return;
 	} while (--i > 0);
 	Atomics.add(this._ia, this._iaIdx+_SYN_NUMWAIT, 1);
-	Atomics.futexWait(this._ia, this._iaIdx+_SYN_WAITGEN, tag, timeout);
+	Atomics.wait(this._ia, this._iaIdx+_SYN_WAITGEN, tag, timeout);
 	Atomics.sub(this._ia, this._iaIdx+_SYN_NUMWAIT, 1);
     },
 
@@ -274,7 +274,7 @@ const _Synchronic_int_methods =
 	// is the number loaded in the load()?  I almost think so,
 	// since our futexes are fair.
 	if (Atomics.load(this._ia, this._iaIdx+_SYN_NUMWAIT) > 0)
-	    Atomics.futexWake(this._ia, this._iaIdx+_SYN_WAITGEN, Number.POSITIVE_INFINITY);
+	    Atomics.wake(this._ia, this._iaIdx+_SYN_WAITGEN, Number.POSITIVE_INFINITY);
     },
 
     _now: (typeof 'performance' != 'undefined' && typeof performance.now == 'function'
@@ -425,14 +425,14 @@ const _Synchronic_float_methods =
     _waitForUpdate: function (tag, timeout) {
 	// TODO: similar spin optimization as the integer case.
 	Atomics.add(this._ia, this._iaIdx+_SYN_NUMWAIT, 1);
-	Atomics.futexWait(this._ia, this._iaIdx+_SYN_WAITGEN, tag, timeout);
+	Atomics.wait(this._ia, this._iaIdx+_SYN_WAITGEN, tag, timeout);
 	Atomics.sub(this._ia, this._iaIdx+_SYN_NUMWAIT, 1);
     },
 
     _notify: function () {
 	Atomics.add(this._ia, this._iaIdx+_SYN_WAITGEN, 2);
 	if (Atomics.load(this._ia, this._iaIdx+_SYN_NUMWAIT) > 0)
-	    Atomics.futexWake(this._ia, this._iaIdx+_SYN_WAITGEN, Number.POSITIVE_INFINITY);
+	    Atomics.wake(this._ia, this._iaIdx+_SYN_WAITGEN, Number.POSITIVE_INFINITY);
     },
 
     _now: (typeof 'performance' != 'undefined' && typeof performance.now == 'function'

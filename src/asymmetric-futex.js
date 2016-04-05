@@ -25,10 +25,10 @@
 //  - Many of these waits can wait on the same location, but they can
 //    also all wait on different locations
 //  - There is only one master, normally the main thread.  Everyone else,
-//    normally the workers, should use futexWait for waiting
+//    normally the workers, should use wait() for waiting
 //  - The workers can use a dedicated wakeup to wake the master,
-//    it need not be integrated with the normal futexWake
-//  - It is useful if the wait mechanism is like futexWait, in that
+//    it need not be integrated with the normal wake()
+//  - It is useful if the wait mechanism is like wait(), in that
 //    it takes an expected value for an int32 cell
 //
 // Design:
@@ -50,6 +50,10 @@ const _WW_LOCK = 1;		// Lock flag
 const _WW_MASK = 7;		// Mask bits for flags
 const _WW_SHFT = 3;		// Shift to get count of waiters
 const _WW_MAX = 0x0FFFFFFF;     // Max count value
+
+const _OK = 0;
+const _NOTEQUAL = -1;
+const _TIMEDOUT = -2;
 
 // Shared base class
 
@@ -111,14 +115,13 @@ MasterFutex.dispatch = function (ev) {
 }
 
 // Call wait() to wait on loc with callback cb if i32a[loc]==expected.
-// Returns Atomics.OK if it is waiting, Atomics.NOTEQUAL if the values
-// are unequal.
+// Returns 0 if it is waiting, -1 if the values are unequal.
 
 MasterFutex.prototype.wait = function (loc, expected, cb) {
-    var r = Atomics.NOTEQUAL;
+    var r = _TIMEDOUT;
     var a = this._lock(loc);
     if (Atomics.load(this._i32a, loc) == expected) {
-	r = Atomics.OK;
+	r = _OK;
 	this._callbacks[loc] = this._callbacks[loc] || [];
 	this._callbacks[loc].push(cb);
 	// TODO: Guard against overflow on the count field
@@ -135,7 +138,7 @@ MasterFutex.prototype._wakeup = function (loc, count) {
     if (!cb)
 	return;
     while (cb.length && count-- > 0)
-	(cb.shift())(Atomics.OK);
+	(cb.shift())(_OK);
 }
 
 // Create a WorkerFutex to be used in the worker.  The arguments are
@@ -162,10 +165,10 @@ WorkerFutex.prototype.wake = function (loc, count) {
 // TODO:
 //
 // Implement a wait timeout, if a timeout then the callback should be
-// invoked with Atomics.TIMEDOUT.  Note this will significantly
-// complicate the protocol: if there is a wakeup message in transit
-// for the timed-out waiter then that message must not wake count
-// waiters, but count-1.  This may be fixable by replacing the
+// invoked with -2 (the old TIMEDOUT value).  Note this will
+// significantly complicate the protocol: if there is a wakeup message
+// in transit for the timed-out waiter then that message must not wake
+// count waiters, but count-1.  This may be fixable by replacing the
 // timed-out waiter in the callbacks array with some sentinel value,
 // so that we account for it properly.  But that leaves the question
 // of how to manage the count of waiters.
@@ -197,7 +200,7 @@ WorkerFutex.prototype.wake = function (loc, count) {
 // and other arrays.
 //
 // None of those optimizations may matter much in applications where
-// only one futexWait is outstanding, and those may be typical.  What
+// only one wait() is outstanding, and those may be typical.  What
 // might matter is a method on the MasterFutex (or even a static
 // method on MasterFutex) to check for in-transit wakeups and run
 // callbacks when appropriate; this can be used to improve

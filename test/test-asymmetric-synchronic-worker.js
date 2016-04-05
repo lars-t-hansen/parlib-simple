@@ -4,7 +4,7 @@
 
 "use strict";
 
-importScripts("../src/asymmetric-synchronic.js");
+importScripts("../util/shim.js", "../src/asymmetric-synchronic.js");
 
 var DEBUG = false;
 

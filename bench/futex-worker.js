@@ -47,13 +47,16 @@ function expectUpdate(s, idx, current) {
 	// These counters are *hugely* important for performance when
 	// using Atomics.pause(), which might indicate that the futex
 	// implementation needs some work!  The counter radically
-	// reduces the number of calls to futexWake().  It makes sense
-	// that it should be faster not to call futexWake, since most
+	// reduces the number of calls to wake().  It makes sense
+	// that it should be faster not to call wake(), since most
 	// of the time that call is not necessary - the spinning was
 	// enough.  Even so, can we do something?  Can we add this
 	// accounting to the futex system, for example?
+	//
+	// (In a lock situation we can spin also on unlock, to see if
+	// somebody grabs the lock, but that does not apply here.)
 	Atomics.add(s, idx+1, 1);
-	Atomics.futexWait(s, idx, current);
+	Atomics.wait(s, idx, current);
 	Atomics.sub(s, idx+1, 1);
     }
 }
@@ -61,7 +64,7 @@ function expectUpdate(s, idx, current) {
 function storeNotify(s, idx, value) {
     Atomics.store(s, idx, value);
     if (Atomics.load(s, idx+1))
-	Atomics.futexWake(s, idx, 1);
+	Atomics.wake(s, idx, 1);
 }
 
 function spinWaitPause(s, idx, current) {

@@ -4,7 +4,8 @@
 
 "use strict";
 
-importScripts("../../src/message.js",
+importScripts("../../util/shim.js",
+	      "../../src/message.js",
 	      "../../src/asymmetric-barrier.js",
 	      "../../src/marshaler.js",
 	      "../../src/par.js",

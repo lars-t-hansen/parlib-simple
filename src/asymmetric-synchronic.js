@@ -34,7 +34,7 @@
  * all invoked when a signal is returned.
  *
  * Worker-to-worker and master-to-worker communication is generally
- * quick, as it's just a futexWake call.  Worker-to-master and
+ * quick, as it's just a wake() call.  Worker-to-master and
  * master-to-master communication is fairly slow, because actual
  * messages must be sent to the master and must be dispatched in the
  * master event loop.
@@ -484,12 +484,12 @@ AsymmetricSynchronic.prototype._notifyToWorkers = function () {
     Atomics.add(ia, _AS_SEQ, 1);
     let waiters = Atomics.load(ia, _AS_NUMWAIT);
     if (waiters > 0)
-	Atomics.futexWake(ia, _AS_SEQ, waiters);
+	Atomics.wake(ia, _AS_SEQ, waiters);
 }
 
 AsymmetricSynchronic.prototype._waitForUpdate = function (tag, timeout) {
     let ia = this._ia;
     Atomics.add(ia, _AS_NUMWAIT, 1);
-    Atomics.futexWait(ia, _AS_SEQ, tag, timeout);
+    Atomics.wait(ia, _AS_SEQ, tag, timeout);
     Atomics.sub(ia, _AS_NUMWAIT, 1);
 }

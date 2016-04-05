@@ -54,7 +54,7 @@ var Synchronic = {
 	var m = 0;
 	Atomics.add(Synchronic._private, 0, 1);
 	while ((m = Atomics.load(i32a, loc)) != desired)
-            Atomics.futexWait(i32a, loc, m);
+            Atomics.wait(i32a, loc, m);
 	Atomics.sub(Synchronic._private, 0, 1);
     },
 
@@ -63,13 +63,13 @@ var Synchronic = {
     expectUpdate: function (i32a, loc, current, timeout) {
 	// Bug: the timeout, if present, should be accounted for in
 	// the spin loop, and should be subtracted from the timeout
-	// passed to futexWait.
+	// passed to wait().
 	for ( var i=Synchronic._spincount ; i >= 0 ; i-- )
 	    if (Atomics.load(i32a, loc) != current)
 		return;
 	Atomics.add(Synchronic._private, 0, 1);
 	for (;;) {
-	    if (Atomics.futexWait(i32a, loc, current, timeout) != Atomics.OK)
+	    if (Atomics.wait(i32a, loc, current, timeout) != "ok")
 		break;
 	    if (Atomics.load(i32a, loc) != current)
 		break;
@@ -87,7 +87,7 @@ var Synchronic = {
 	Atomics.store(i32a, loc, v);
 	if (Atomics.load(Synchronic._private, 0)) {
 	    // INT_MAX becuse Chrome Canary 50 crashes on Number.POSITIVE_INFINITY
-	    Atomics.futexWake(i32a, loc, justOne ? 1 : 0x7FFFFFFF);
+	    Atomics.wake(i32a, loc, justOne ? 1 : 0x7FFFFFFF);
 	}
     },
 
@@ -96,7 +96,7 @@ var Synchronic = {
     notify: function (i32a, loc, justOne) {
 	if (Atomics.load(Synchronic._private, 0)) {
 	    // INT_MAX because Chrome Canary 50 crashes on Number.POSITIVE_INFINITY
-	    Atomics.futexWake(i32a, loc, justOne ? 1 : 0x7FFFFFFF);
+	    Atomics.wake(i32a, loc, justOne ? 1 : 0x7FFFFFFF);
 	}
     },
 
@@ -107,7 +107,7 @@ var Synchronic = {
     // Value based on minimal experimentation on one (fast) platform:
     // This is long enough to allow the "work" between a receive and a
     // send in the synchronic benchmark to be doubly-recursive fib(10)
-    // in Firefox Nightly without going into futexWait most of the
+    // in Firefox Nightly without going into wait() most of the
     // time.  (The cutoff for Chrome Canary is below 50 [sic].)  See
     // synchronic-worker.js.
 

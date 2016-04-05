@@ -4,7 +4,8 @@
 
 // 2015-01-12 / lhansen@mozilla.com
 
-importScripts("../src/message.js",
+importScripts("../util/shim.js",
+	      "../src/message.js",
 	      "../src/asymmetric-barrier.js");
 
 dispatchMessage(self, "setup", function (data) {

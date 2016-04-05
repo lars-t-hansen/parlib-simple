@@ -70,7 +70,7 @@ Lock.prototype.lock =
         if ((c = Atomics.compareExchange(iab, stateIdx, 0, 1)) != 0) {
             do {
                 if (c == 2 || Atomics.compareExchange(iab, stateIdx, 1, 2) != 0)
-                    Atomics.futexWait(iab, stateIdx, 2, Number.POSITIVE_INFINITY);
+                    Atomics.wait(iab, stateIdx, 2, Number.POSITIVE_INFINITY);
             } while ((c = Atomics.compareExchange(iab, stateIdx, 0, 2)) != 0);
         }
     };
@@ -95,7 +95,7 @@ Lock.prototype.unlock =
         // Wake up a waiter if there are any
         if (v0 != 1) {
             Atomics.store(iab, stateIdx, 0);
-            Atomics.futexWake(iab, stateIdx, 1);
+            Atomics.wake(iab, stateIdx, 1);
         }
     };
 
@@ -164,7 +164,7 @@ Cond.prototype.wait =
         const seq = Atomics.load(iab, seqIndex);
         const lock = this.lock;
         lock.unlock();
-        var r = Atomics.futexWait(iab, seqIndex, seq, Number.POSITIVE_INFINITY);
+        Atomics.wait(iab, seqIndex, seq, Number.POSITIVE_INFINITY);
         lock.lock();
     };
 
@@ -175,7 +175,7 @@ Cond.prototype.wake =
         const iab = this.iab;
         const seqIndex = this.ibase;
         Atomics.add(iab, seqIndex, 1);
-        Atomics.futexWake(iab, seqIndex, 1);
+        Atomics.wake(iab, seqIndex, 1);
     };
 
 // Wakes all waiters on cond.  The cond's lock must be held by the
@@ -187,7 +187,7 @@ Cond.prototype.wakeAll =
         Atomics.add(iab, seqIndex, 1);
         // Optimization opportunity: only wake one, and requeue the others
         // (in such a way as to obey the locking protocol properly).
-        Atomics.futexWake(iab, seqIndex, 65535);
+        Atomics.wake(iab, seqIndex, 65535);
     };
 
 Cond.prototype.toString =
