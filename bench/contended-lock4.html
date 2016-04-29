@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+     License, v. 2.0. If a copy of the MPL was not distributed with this
+     file, You can obtain one at http://mozilla.org/MPL/2.0/.  -->
+<html>
+<head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+</head>
+<body>
+
+<p> This test creates some number of pairs of workers that repeatedly
+  enter and leave contended critical regions, one region per
+  pair. </p>
+  
+<script src="../util/shim.js"></script>
+<script src="scrool.js"></script>
+<script src="lock.js"></script>
+
+<script>
+var ia = new Int32Array(new SharedArrayBuffer(8192));
+var lockOffs_ = 0;
+var countOffs_ = 128;
+var iterations = 5000000;
+var runs = 5;
+var finished = 0;
+var numPairs = 2;
+var ws = [];
+
+msg("Number of pairs: " + numPairs);
+setup();
+runIter();
+
+function setup() {
+    for ( let i=0 ; i < numPairs ; i++ ) {
+        let lockOffs = lockOffs_+(i*256);
+        let countOffs = countOffs_+(i*256);
+
+        Lock.init(ia, lockOffs);
+
+        for ( let j=0 ; j < 2 ; j++ ) {
+            let w = new Worker("contended-lock-worker.js");
+            w.postMessage(["setup", ia, lockOffs, countOffs, iterations], [ia.buffer]);
+            w.onmessage = handleDone;
+            ws.push(w);
+        }
+    }
+}
+
+function runIter() {
+    finished = 0;
+    --runs;
+
+    for ( let i=0 ; i < numPairs ; i++ ) {
+        let countOffs = countOffs_+(i*256);
+        ia[countOffs] = 0;
+    }
+
+    for ( let i=0 ; i < ws.length ; i++ )
+        ws[i].postMessage(["run"]);
+}
+
+function handleDone(ev) {
+    msg(ev.data);
+    if (++finished == numPairs*2) {
+        printResults();
+        if (runs > 0) runIter();
+    }
+}
+
+function printResults() {
+    for ( let i=0 ; i < numPairs ; i++ ) {
+        let lockOffs = lockOffs_+(i*256);
+        let countOffs = countOffs_+(i*256);
+        msg("Count should be " + (2*iterations) + ": " + ia[countOffs]);
+        msg("Contention: " + ia[lockOffs+2]);
+    }
+    msg("----------");
+}
+</script>
+
+</body>
+</html>

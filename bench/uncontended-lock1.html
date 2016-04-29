@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+     License, v. 2.0. If a copy of the MPL was not distributed with this
+     file, You can obtain one at http://mozilla.org/MPL/2.0/.  -->
+<html>
+<head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+</head>
+<body>
+
+<p> This test creates a single worker that repeatedly enters and
+  leaves an uncontended critical region. </p>
+  
+<script src="../util/shim.js"></script>
+<script src="scrool.js"></script>
+<script src="lock.js"></script>
+
+<script>
+var ia = new Int32Array(new SharedArrayBuffer(4096));
+var lockOffs = 0;
+var countOffs = 128;
+var iterations = 10000000;
+
+Lock.init(ia, lockOffs);
+
+var w = new Worker("uncontended-lock1-worker.js");
+w.postMessage([ia, lockOffs, countOffs, iterations], [ia.buffer]);
+w.onmessage = function (ev) {
+    msg(ev.data);
+    msg("Count should be " + iterations + ": " + ia[countOffs]);
+}
+</script>
+
+</body>
+</html>
