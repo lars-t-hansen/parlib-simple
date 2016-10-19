@@ -34,3 +34,6 @@ delete Atomics.NOTEQUAL;
 delete Atomics.futexWait;
 delete Atomics.futexWake;
 delete Atomics.futexWakeOrRequeue;
+
+// if (Atomics.pause === undefined)
+//     Atomics.pause = function (x) { +x; return false; };

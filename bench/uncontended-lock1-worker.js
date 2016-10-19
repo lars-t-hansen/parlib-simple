@@ -11,7 +11,10 @@ onmessage = function (ev) {
 	//ia[countOffs]++;
 
 	// "Medium" workload
-	ia[countOffs]+=g(h(i));
+	//ia[countOffs]+=g(h(i));
+
+	// "Large" workload
+	ia[countOffs]+=fib(i&7);
 
 	lock.unlock();
     }
@@ -25,4 +28,10 @@ function g(x) {
 
 function h(x) {
     return (x & 1) | 1;
+}
+
+function fib(n) {
+    if (n < 2)
+	return n;
+    return fib(n-1) + fib(n-2);
 }

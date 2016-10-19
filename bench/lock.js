@@ -5,15 +5,16 @@
 // this._wake() in unlock() out of the conditional.  Normally you want
 // withCounting to be false in that case.
 
-// Set withPause to true to use Atomics.pause to avoid going into Atomics.wait.
-// Requires the patch that defines Atomics.pause.
+// Set withPause to true to use Atomics.pause to avoid going into
+// Atomics.wait.  Requires the patch that defines Atomics.pause.  This
+// is mostly sensible only with withCounting.
 
 const withPause = false;
 
 // Set withCounting to true to use a counter for the number of waiters to avoid
 // calling Atomics.wake.
 
-const withCounting = false;
+const withCounting = true;
 
 function Lock(ia, offs) {
     this.ia = ia;
@@ -112,21 +113,21 @@ function wait() {
 var wake = wakePause;
 
 Lock.prototype._wait = (function () {
-    if (pause && counting)
+    if (withPause && withCounting)
 	return waitPauseCounting;
-    if (pause)
+    if (withPause)
 	return waitPause;
-    if (counting)
+    if (withCounting)
 	return waitCounting;
     return wait;
 })();
 
 Lock.prototype._wake = (function () {
-    if (pause && counting)
+    if (withPause && withCounting)
 	return wakePauseCounting;
-    if (pause)
+    if (withPause)
 	return wakePause;
-    if (counting)
+    if (withCounting)
 	return wakeCounting;
     return wake;
 })();
