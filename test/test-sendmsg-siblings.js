@@ -18,8 +18,8 @@ var sab = new SharedArrayBuffer(8192);
 w1.onmessage = workerReady;
 w2.onmessage = workerReady;
 
-w1.postMessage(["setup", 1, sab, iterations], [sab]);
-w2.postMessage(["setup", 2, sab, iterations], [sab]);
+w1.postMessage(["setup", 1, sab, iterations]);
+w2.postMessage(["setup", 2, sab, iterations]);
 
 var waiting = 2;
 

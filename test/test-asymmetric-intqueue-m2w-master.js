@@ -19,7 +19,7 @@ const MPIQ = new MasterProducerIntQueue(sab, 0, alloc, true);
 
 for ( let i=1 ; i <= numWorkers ; i++ ) {
     let w = new Worker("test-asymmetric-intqueue-m2w-worker.js");
-    w.postMessage(["init", i, sab, 0, alloc, iterations], [sab]);
+    w.postMessage(["init", i, sab, 0, alloc, iterations]);
     w.onmessage = handleMsg;
 }
 

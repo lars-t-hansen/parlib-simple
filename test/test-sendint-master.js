@@ -23,7 +23,7 @@ var locIdx = 512;
 // Kick off the worker and wait for a message that it is ready.
 
 w.onmessage = workerReady;
-w.postMessage([sab, 0, 512, iterations], [sab]);
+w.postMessage([sab, 0, 512, iterations]);
 
 console.log("Master waiting");
 

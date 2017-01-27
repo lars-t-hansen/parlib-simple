@@ -90,8 +90,7 @@ function MasterPar(iab, ibase, numWorkers, workerScript, readyCallback) {
 	w.postMessage(["WorkerPar.start",
 		       iab.buffer, iab.byteOffset, i,
 		       this._barrierLoc, barrierID, this._opLoc, this._funcLoc, this._sizeLoc, this._nextLoc,
-		       this._limLoc, this._nextArgLoc, this._argLimLoc],
-		      [iab.buffer]);
+		       this._limLoc, this._nextArgLoc, this._argLimLoc]);
 	this._workers.push(w);
     }
 
@@ -306,14 +305,11 @@ MasterPar.prototype._comm =
 
 	    // Transmit buffers
 	    var xfer = [];
-	    var yfer = [];
-	    for ( var x of newSAB ) {
+	    for ( var x of newSAB )
 		xfer.push([x.sab, x.id]);
-		yfer.push(x.sab);
-	    }
 	    xfer.unshift("WorkerPar.transfer");
 	    for ( var w of self._workers )
-		w.postMessage(xfer, yfer);
+		w.postMessage(xfer);
 	}
 	else {
 	    self._callback = doneCallback;

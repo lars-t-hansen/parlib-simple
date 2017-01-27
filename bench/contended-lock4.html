@@ -39,7 +39,7 @@ function setup() {
 
         for ( let j=0 ; j < 2 ; j++ ) {
             let w = new Worker("contended-lock-worker.js");
-            w.postMessage(["setup", ia, lockOffs, countOffs, iterations], [ia.buffer]);
+            w.postMessage(["setup", ia, lockOffs, countOffs, iterations]);
             w.onmessage = handleDone;
             ws.push(w);
         }

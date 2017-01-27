@@ -46,8 +46,7 @@ for ( var i=0 ; i < numWorkers ; i++ ) {
 		   barrierLoc,
 		   magnificationLoc,
 		   i*sliceHeight,
-		   (i == numWorkers-1 ? height : (i+1)*sliceHeight)],
-		  [rawmem]);
+		   (i == numWorkers-1 ? height : (i+1)*sliceHeight)]);
 }
 
 var magnification = 1;

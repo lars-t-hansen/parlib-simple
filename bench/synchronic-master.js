@@ -18,5 +18,5 @@ var sab = new SharedArrayBuffer(bufSize);
 for ( var i=0 ; i < 2 ; i++ ) {
     var w = new Worker("synchronic-worker.js");
     w.onmessage = function (ev) { msg(ev.data) }
-    w.postMessage([sab, syncOffset, workOffset, polyOffset, iterations, i], [sab]);
+    w.postMessage([sab, syncOffset, workOffset, polyOffset, iterations, i]);
 }

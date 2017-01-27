@@ -47,8 +47,7 @@ function runTest() {
                         setTimeout(consumer, 0);
                 }
             };
-        w.postMessage([iab.buffer, bufIdx, bufSize, availIdx, leftIdx, rightIdx, lockIdx, nonfullIdx, nonemptyIdx, numElem, numWorkers, id],
-                      [iab.buffer]);
+        w.postMessage([iab.buffer, bufIdx, bufSize, availIdx, leftIdx, rightIdx, lockIdx, nonfullIdx, nonemptyIdx, numElem, numWorkers, id]);
     }
     lock = new Lock(iab, lockIdx);
     nonfull = new Cond(lock, nonfullIdx);

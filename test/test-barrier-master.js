@@ -44,8 +44,7 @@ function runTest() {
                 }
             };
 	// Workers have ID 1..numWorkers, master has ID numWorkers+1
-        w.postMessage([iab.buffer, bufIdx, bufSize, barrierIdx, numSegments, segmentSize, id+1],
-                      [iab.buffer]);
+        w.postMessage([iab.buffer, bufIdx, bufSize, barrierIdx, numSegments, segmentSize, id+1]);
     }
 }
 

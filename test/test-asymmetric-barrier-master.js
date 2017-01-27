@@ -40,7 +40,7 @@ function runTest() {
         var w = new Worker("test-asymmetric-barrier-worker.js");
 	MasterBarrier.addWorker(w);
 	w.addEventListener("message", function (ev) { msg(String(ev.data)) });
-        w.postMessage(["setup", sab, numIter, barrierIdx, barrierID, addendIdx, segmentSize*id, segmentSize], [sab]);
+        w.postMessage(["setup", sab, numIter, barrierIdx, barrierID, addendIdx, segmentSize*id, segmentSize]);
     }
 }
 

@@ -10,7 +10,7 @@ var p = channel.port1;
 var q = channel.port2;
 
 p.onmessage = workerReady;
-w.postMessage([iterations, q], [q]);
+w.postMessage([iterations, q]);
 
 function workerReady(ev) {
     p.onmessage = processMsg;

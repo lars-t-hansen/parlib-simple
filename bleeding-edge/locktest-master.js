@@ -18,7 +18,7 @@ Lock.initialize(ia, mem_lock);
 
 for ( var i=0 ; i < numAgents ; i++ ) {
     let w = new Worker("locktest-worker.js");
-    w.postMessage([sab, mem_agents + (i+1)*Agent_INTS, i+2, mem_lock, mem_datum], [sab]);
+    w.postMessage([sab, mem_agents + (i+1)*Agent_INTS, i+2, mem_lock, mem_datum]);
     w.onmessage = workerDone;
 }
 

@@ -17,5 +17,5 @@ var sab = new SharedArrayBuffer(bufSize);
 for ( var i=0 ; i < 2 ; i++ ) {
     var w = new Worker("futex-worker.js");
     w.onmessage = function (ev) { msg(ev.data) }
-    w.postMessage([sab, syncOffset, workOffset, iterations, i], [sab]);
+    w.postMessage([sab, syncOffset, workOffset, iterations, i]);
 }

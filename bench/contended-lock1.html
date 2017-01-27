@@ -26,7 +26,7 @@ Lock.init(ia, lockOffs);
 
 for ( let i=0 ; i < 2 ; i++ ) {
     let w = new Worker("uncontended-lock1-worker.js");
-    w.postMessage([ia, lockOffs, countOffs, iterations], [ia.buffer]);
+    w.postMessage([ia, lockOffs, countOffs, iterations]);
     w.onmessage = function (ev) {
         msg(ev.data);
         if (++finished == 2) {

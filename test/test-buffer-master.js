@@ -44,8 +44,7 @@ function runTest() {
                         setTimeout(consumer, 0);
                 }
             };
-        w.postMessage([iab.buffer, qIdx, qSize, bufferIdx, numElem, numWorkers, id],
-                      [iab.buffer]);
+        w.postMessage([iab.buffer, qIdx, qSize, bufferIdx, numElem, numWorkers, id]);
     }
 }
 

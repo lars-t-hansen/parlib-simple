@@ -24,7 +24,7 @@ var iterations = 10000000;
 Lock.init(ia, lockOffs);
 
 var w = new Worker("uncontended-lock1-worker.js");
-w.postMessage([ia, lockOffs, countOffs, iterations], [ia.buffer]);
+w.postMessage([ia, lockOffs, countOffs, iterations]);
 w.onmessage = function (ev) {
     msg(ev.data);
     msg("Count should be " + iterations + ": " + ia[countOffs]);

@@ -32,7 +32,7 @@ function runTest() {
 	var w = new Worker("test-float64atomics-worker.js");
 	MasterBarrier.addWorker(w);
 	w.addEventListener("message", function (ev) { msg(String(ev.data)) });
-	w.postMessage([sab, barrierIdx, barrierId, accIdx, atomicIdx, iterations], [sab]);
+	w.postMessage([sab, barrierIdx, barrierId, accIdx, atomicIdx, iterations]);
     }
 }
 

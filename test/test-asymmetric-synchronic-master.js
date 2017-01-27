@@ -38,7 +38,7 @@ const AS = new AsymmetricSynchronic(sab, asOffset, true);
 
 for ( let i=1 ; i <= numWorkers ; i++ ) {
     let w = new Worker("test-asymmetric-synchronic-worker.js");
-    w.postMessage(["init", i, sab, asOffset], [sab]);
+    w.postMessage(["init", i, sab, asOffset]);
     w.onmessage = handleMsg;
 }
 

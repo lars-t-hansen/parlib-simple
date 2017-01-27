@@ -22,7 +22,7 @@ w.onmessage = function (ev) {
 	return;
     console.log(ev.data);
 }
-w.postMessage(["start", sab, id, testloc], [sab]);
+w.postMessage(["start", sab, id, testloc]);
 
 var then = new Date();
 

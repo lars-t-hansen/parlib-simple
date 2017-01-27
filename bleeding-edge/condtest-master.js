@@ -34,7 +34,7 @@ Cond.initialize(ia, mem_cond2);
 
 for ( var i=0 ; i < numAgents ; i++ ) {
     let w = new Worker("condtest-worker.js");
-    w.postMessage([sab, mem_agents + (i+1)*Agent_INTS, i+2, mem_lock, mem_cond1, mem_cond2, mem_head, mem_tail, mem_buffer, BUFSIZ, mem_datum], [sab]);
+    w.postMessage([sab, mem_agents + (i+1)*Agent_INTS, i+2, mem_lock, mem_cond1, mem_cond2, mem_head, mem_tail, mem_buffer, BUFSIZ, mem_datum]);
     w.onmessage = workerDone;
 }
 
