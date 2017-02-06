@@ -34,7 +34,7 @@ data structures.
 * barrier synchronization (barrier.js)
 * asymmetric master/worker barrier synchronization (asymmetric-barrier.js)
 * atomics polyfill for SharedFloat64Array (float64atomics.js)
-* atomics polyfill for "int64" values on SharedInt32Array (int32atomics.js)
+* atomics polyfill for "int64" values on SharedInt32Array (int64atomics.js)
 * classical locks and condition variables (lock.js)
 
 ## Utilities
