@@ -1,4 +1,6 @@
-# parlib-simple
+# parlib-simple UNMAINTAINED
+
+NOTE: This library is no longer being maintained.
 
 This is a simple library providing synchronization and work
 distribution abstractions, assuming as little as possible about the
